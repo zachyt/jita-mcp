@@ -1,0 +1,46 @@
+# Build artifacts and caches — recreated inside the image
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+
+# Local data — re-fetched inside the SDE stage
+data/
+
+# Editor / OS junk
+.idea/
+.vscode/
+.DS_Store
+
+# Local env files — runtime env comes from the deploy platform
+.env
+.env.local
+.env.*.local
+
+# Tests — not needed in the production image
+tests/
+
+# Docs / meta — kept tiny things that pyproject references; runtime
+# stage doesn't COPY them so they never reach the final image.
+LICENSE
+eve_mcp_handoff.md
+.pre-commit-config.yaml
+.gitignore
+.gitmodules
+.python-version
+
+# Pyfa: send only the eos subdir, exclude the ~265MB of GUI assets
+vendor/pyfa/**
+!vendor/pyfa/eos/**
+
+# Git internals
+.git/
+.github/
