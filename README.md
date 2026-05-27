@@ -32,13 +32,59 @@ layer so a change in one doesn't invalidate the others.
 
 ## Dev setup
 
-Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/). On macOS:
 
 ```bash
-uv sync
-uv run pytest
-uv run eve-mcp     # starts the server on :8080
+brew install uv
 ```
+
+### One-shot bootstrap
+
+```bash
+git clone --recurse-submodules <repo-url> eve-mcp
+cd eve-mcp
+make setup        # pulls submodules, syncs deps, fetches the SDE (~130MB download)
+```
+
+If you already cloned without `--recurse-submodules`:
+
+```bash
+git submodule update --init --recursive
+```
+
+### Day-to-day
+
+| Command           | What it does                                          |
+| ----------------- | ----------------------------------------------------- |
+| `make sync`       | Install / sync Python deps via uv                     |
+| `make fetch-sde`  | Download the SDE pinned in `sde.checksum` (idempotent) |
+| `make test`       | Run the test suite                                    |
+| `make lint`       | `ruff check`                                          |
+| `make fmt`        | `ruff format`                                         |
+| `make run`        | Start the MCP server on :8080                         |
+| `make check`      | Lint + test                                           |
+
+Or call `uv` directly: `uv run pytest`, `uv run ruff check`, `uv run eve-mcp`,
+etc. The Makefile is just a convenience wrapper.
+
+### SDE
+
+The Static Data Export (~700MB uncompressed) is sourced from Fuzzwork and
+**pinned by MD5 in `sde.checksum`** so dev/CI/prod builds are reproducible.
+`make fetch-sde` is idempotent — it skips the download when the local file
+already matches the pinned MD5. To pull whatever is currently live upstream
+(useful for the SDE-watch workflow), run:
+
+```bash
+python3 scripts/fetch_sde.py --version latest
+```
+
+### Submodule (Pyfa)
+
+The fitting engine lives at `vendor/pyfa/` as a git submodule pinned to a
+specific Pyfa commit. The pin moves only via an explicit
+`git submodule update --remote vendor/pyfa && git commit` — automated by a
+scheduled GitHub Action that opens a PR when upstream advances.
 
 ## Project layout
 

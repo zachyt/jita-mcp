@@ -107,10 +107,10 @@ markers = [
 ]
 
 # ---------------------------------------------------------------------------
-# uv
+# Dependency groups (PEP 735) — `uv sync` installs the `dev` group by default
 # ---------------------------------------------------------------------------
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "pytest-httpx>=0.32.0",
@@ -118,7 +118,3 @@ dev-dependencies = [
     "pyright>=1.1.385",
     "pre-commit>=4.0.0",
 ]
-
-# Once we vendor eos as a submodule at vendor/eos, uncomment:
-# [tool.uv.sources]
-# eos = { path = "vendor/eos", editable = true }
