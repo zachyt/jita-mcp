@@ -57,7 +57,8 @@ packages = ["src/eve_mcp"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "tests"]
+src = ["src", "tests", "scripts"]
+extend-exclude = ["vendor", "data"]
 
 [tool.ruff.lint]
 select = [
@@ -70,9 +71,11 @@ select = [
     "RUF",  # ruff-specific
     "ASYNC",
     "PTH",  # use pathlib
+    "ANN",  # flake8-annotations — enforce type annotations on functions
 ]
 ignore = [
-    "E501", # line length handled by formatter
+    "E501",   # line length handled by formatter
+    "ANN401", # allow `Any` — needed for sqlite rows, MCP response dicts, ESI JSON
 ]
 
 [tool.ruff.format]
@@ -83,10 +86,10 @@ indent-style = "space"
 # Pyright: type checker
 # ---------------------------------------------------------------------------
 [tool.pyright]
-include = ["src", "tests"]
-exclude = ["**/__pycache__", "vendor", ".venv"]
+include = ["src", "tests", "scripts"]
+exclude = ["**/__pycache__", "vendor", ".venv", "data"]
 pythonVersion = "3.12"
-typeCheckingMode = "basic"
+typeCheckingMode = "standard"
 reportMissingImports = "error"
 reportUnusedImport = "warning"
 

@@ -8,7 +8,6 @@ from pathlib import Path
 
 from eve_mcp.config import settings
 
-
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS price_cache (
     type_id    INTEGER PRIMARY KEY,
@@ -20,7 +19,7 @@ CREATE TABLE IF NOT EXISTS price_cache (
 
 
 class PriceCache:
-    def __init__(self, path: Path, ttl_seconds: int):
+    def __init__(self, path: Path, ttl_seconds: int) -> None:
         self.path = path
         self.ttl_seconds = ttl_seconds
         path.parent.mkdir(parents=True, exist_ok=True)

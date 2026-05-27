@@ -15,7 +15,7 @@ from eve_mcp.config import settings
 
 
 class SDE:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path) -> None:
         self.path = path
         uri = f"file:{path}?mode=ro"
         self._conn = sqlite3.connect(uri, uri=True, check_same_thread=False)
