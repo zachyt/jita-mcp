@@ -54,18 +54,19 @@ git submodule update --init --recursive
 
 ### Day-to-day
 
-| Command           | What it does                                          |
-| ----------------- | ----------------------------------------------------- |
-| `make sync`       | Install / sync Python deps via uv                     |
-| `make fetch-sde`  | Download the SDE pinned in `sde.checksum` (idempotent) |
-| `make test`       | Run the test suite                                    |
-| `make lint`       | `ruff check`                                          |
-| `make fmt`        | `ruff format`                                         |
-| `make run`        | Start the MCP server on :8080                         |
-| `make check`      | Lint + test                                           |
+`uv` is the entry point for everything; the Makefile only carries multi-step
+composition targets.
 
-Or call `uv` directly: `uv run pytest`, `uv run ruff check`, `uv run eve-mcp`,
-etc. The Makefile is just a convenience wrapper.
+| Command                  | What it does                                          |
+| ------------------------ | ----------------------------------------------------- |
+| `uv sync`                | Install / sync Python deps                            |
+| `uv run pytest`          | Run the test suite                                    |
+| `uv run ruff check`      | Lint                                                  |
+| `uv run ruff format`     | Format                                                |
+| `uv run eve-mcp`         | Start the MCP server on :8080                         |
+| `make setup`             | submodules + `uv sync` + fetch SDE (one-shot bootstrap) |
+| `make fetch-sde`         | Idempotent SDE download                               |
+| `make clean`             | Remove venv, caches, downloaded SDE                   |
 
 ### SDE
 
