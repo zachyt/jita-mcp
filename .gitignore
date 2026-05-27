@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+
+# uv
+# (.python-version is intentionally committed so contributors get the same Python)
+
+# Build / dist
+build/
+dist/
+*.egg-info/
+*.egg
+wheels/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.tox/
+htmlcov/
+.coverage
+.coverage.*
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Data — never commit the full SDE (~700MB)
+data/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.bz2
+
+# Allow tiny test fixtures
+!tests/fixtures/
+!tests/fixtures/*.sqlite
+
+# Local runtime state
+price_cache.sqlite

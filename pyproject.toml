@@ -1,0 +1,124 @@
+[project]
+name = "eve-mcp"
+version = "0.1.0"
+description = "EVE Online fitting MCP server — exposes ship/module/fit tools to Claude and Gemini via remote MCP."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "GPL-3.0-or-later"
+authors = [
+    { name = "Zachery Tucker", email = "ztucker@mudhovel.com" },
+]
+keywords = ["eve-online", "mcp", "model-context-protocol", "fitting", "eos"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Games/Entertainment",
+]
+
+dependencies = [
+    "mcp>=1.2.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "aiohttp>=3.10.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-httpx>=0.32.0",
+    "ruff>=0.7.0",
+    "pyright>=1.1.385",
+    "pre-commit>=4.0.0",
+]
+
+[project.scripts]
+eve-mcp = "eve_mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/ztucker/eve-mcp"
+Issues = "https://github.com/ztucker/eve-mcp/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/eve_mcp"]
+
+# ---------------------------------------------------------------------------
+# Ruff: linter + formatter
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # bugbear
+    "UP",   # pyupgrade
+    "SIM",  # simplify
+    "RUF",  # ruff-specific
+    "ASYNC",
+    "PTH",  # use pathlib
+]
+ignore = [
+    "E501", # line length handled by formatter
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ---------------------------------------------------------------------------
+# Pyright: type checker
+# ---------------------------------------------------------------------------
+[tool.pyright]
+include = ["src", "tests"]
+exclude = ["**/__pycache__", "vendor", ".venv"]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+reportMissingImports = "error"
+reportUnusedImport = "warning"
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+markers = [
+    "sde: tests that require the full SDE (slow, run in CI only)",
+    "esi: tests that hit the real ESI API",
+]
+
+# ---------------------------------------------------------------------------
+# uv
+# ---------------------------------------------------------------------------
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-httpx>=0.32.0",
+    "ruff>=0.7.0",
+    "pyright>=1.1.385",
+    "pre-commit>=4.0.0",
+]
+
+# Once we vendor eos as a submodule at vendor/eos, uncomment:
+# [tool.uv.sources]
+# eos = { path = "vendor/eos", editable = true }
