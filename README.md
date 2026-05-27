@@ -38,35 +38,28 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/). On macOS:
 brew install uv
 ```
 
-### One-shot bootstrap
+### Bootstrap
 
 ```bash
 git clone --recurse-submodules <repo-url> eve-mcp
 cd eve-mcp
-make setup        # pulls submodules, syncs deps, fetches the SDE (~130MB download)
-```
-
-If you already cloned without `--recurse-submodules`:
-
-```bash
-git submodule update --init --recursive
+git submodule update --init --recursive    # only if you forgot --recurse-submodules
+uv sync                                    # creates .venv, installs deps
+python3 scripts/fetch_sde.py               # downloads + decompresses SDE (~130MB)
 ```
 
 ### Day-to-day
 
-`uv` is the entry point for everything; the Makefile only carries multi-step
-composition targets.
+`uv` is the entry point for everything — no task runner, no Makefile.
 
-| Command                  | What it does                                          |
-| ------------------------ | ----------------------------------------------------- |
-| `uv sync`                | Install / sync Python deps                            |
-| `uv run pytest`          | Run the test suite                                    |
-| `uv run ruff check`      | Lint                                                  |
-| `uv run ruff format`     | Format                                                |
-| `uv run eve-mcp`         | Start the MCP server on :8080                         |
-| `make setup`             | submodules + `uv sync` + fetch SDE (one-shot bootstrap) |
-| `make fetch-sde`         | Idempotent SDE download                               |
-| `make clean`             | Remove venv, caches, downloaded SDE                   |
+| Command                       | What it does                                           |
+| ----------------------------- | ------------------------------------------------------ |
+| `uv sync`                     | Install / sync Python deps                             |
+| `uv run pytest`               | Run the test suite                                     |
+| `uv run ruff check`           | Lint                                                   |
+| `uv run ruff format`          | Format                                                 |
+| `uv run eve-mcp`              | Start the MCP server on :8080                          |
+| `python3 scripts/fetch_sde.py` | Idempotent SDE download (pinned by `sde.checksum`)    |
 
 ### SDE
 
