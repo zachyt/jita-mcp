@@ -90,6 +90,9 @@ indent-style = "space"
 [tool.pyright]
 include = ["jita_mcp", "tests", "scripts"]
 exclude = ["**/__pycache__", "vendor", ".venv", "data"]
+# eos is added to sys.path at runtime by engine.eos_setup. Pyright doesn't
+# follow runtime path manipulation, so declare the lookup path explicitly.
+extraPaths = ["vendor/pyfa"]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 reportMissingImports = "error"

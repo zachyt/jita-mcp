@@ -1,4 +1,4 @@
-"""End-to-end tests for the get_ship_info tool against the real SDE."""
+"""End-to-end tests for the get_ship_info tool against pyfa's eve.db."""
 
 from __future__ import annotations
 
@@ -34,14 +34,14 @@ def test_get_ship_info_case_insensitive() -> None:
 
 
 @pytest.mark.sde
-def test_get_ship_info_traits_present() -> None:
+def test_get_ship_info_bonuses_present() -> None:
     res = get_ship_info("Condor")
     bonuses = res["bonuses"]
-    assert any(b["kind"] == "skill_bonus" and b["skill"] == "Caldari Frigate" for b in bonuses)
-    assert any(b["kind"] == "role_bonus" and b["skill"] is None for b in bonuses)
-    # bonusText should be stripped of <a href=showinfo:...> tags
-    for b in bonuses:
-        assert "<a " not in b["text"]
+    # Pyfa flattens trait rows into a pre-rendered text blob; we strip HTML.
+    assert isinstance(bonuses, str)
+    assert "Caldari Frigate" in bonuses
+    assert "Role Bonus" in bonuses
+    assert "<" not in bonuses and ">" not in bonuses  # tags stripped
 
 
 def test_get_ship_info_no_match() -> None:
