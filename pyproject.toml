@@ -41,8 +41,8 @@ dev = [
 jita-mcp = "jita_mcp.server:main"
 
 [project.urls]
-Homepage = "https://github.com/ztucker/jita-mcp"
-Issues = "https://github.com/ztucker/jita-mcp/issues"
+Homepage = "https://github.com/zachyt/jita-mcp"
+Issues = "https://github.com/zachyt/jita-mcp/issues"
 
 [build-system]
 requires = ["hatchling"]
