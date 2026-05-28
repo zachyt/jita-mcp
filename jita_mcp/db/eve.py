@@ -61,20 +61,18 @@ CAPACITY_ATTRS = {
     "shipMaintenanceBayCapacity": "ship_maintenance_bay",
     "fleetHangarCapacity": "fleet_hangar",
     "specialFuelBayCapacity": "fuel_bay",
-    "specialOreHoldCapacity": "ore_hold",
+    # Mining ships (Venture, mining barges, exhumers, Orca, Rorqual). Note: the
+    # attribute is `generalMiningHoldCapacity`, not `specialOreHoldCapacity` —
+    # that name doesn't exist in pyfa's eve.db schema.
+    "generalMiningHoldCapacity": "ore_hold",
+    # Specialised hauler holds (Gallente mineral/ice haulers, Minmatar gas/ammo,
+    # Caldari PI/CC, etc).
     "specialMineralHoldCapacity": "mineral_hold",
     "specialGasHoldCapacity": "gas_hold",
     "specialIceHoldCapacity": "ice_hold",
-    "specialAsteroidHoldCapacity": "asteroid_hold",
-    "specialSalvageHoldCapacity": "salvage_hold",
     "specialAmmoHoldCapacity": "ammo_hold",
     "specialCommandCenterHoldCapacity": "command_center_hold",
     "specialPlanetaryCommoditiesHoldCapacity": "planetary_commodities_hold",
-    "specialMaterialBayCapacity": "material_bay",
-    "specialBoosterHoldCapacity": "booster_hold",
-    "specialSubsystemHoldCapacity": "subsystem_hold",
-    "specialMobileDepotHoldCapacity": "mobile_depot_hold",
-    "frigateEscapeBayCapacity": "frigate_escape_bay",
 }
 ALWAYS_EMIT_CAPACITY = {"capacity", "droneCapacity", "droneBandwidth"}
 
