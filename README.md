@@ -1,4 +1,4 @@
-# eve-mcp
+# jita-mcp
 
 Remote MCP server that gives Claude and Gemini ground truth on EVE Online ship
 fittings: stat validation, effective DPS/EHP with skills and bonuses applied,
@@ -41,8 +41,8 @@ brew install uv
 ### Bootstrap
 
 ```bash
-git clone --recurse-submodules <repo-url> eve-mcp
-cd eve-mcp
+git clone --recurse-submodules <repo-url> jita-mcp
+cd jita-mcp
 git submodule update --init --recursive    # only if you forgot --recurse-submodules
 uv sync                                    # creates .venv, installs deps
 python3 scripts/fetch_sde.py               # downloads + decompresses SDE (~130MB)
@@ -58,16 +58,16 @@ python3 scripts/fetch_sde.py               # downloads + decompresses SDE (~130M
 | `uv run pytest`               | Run the test suite                                     |
 | `uv run ruff check`           | Lint                                                   |
 | `uv run ruff format`          | Format                                                 |
-| `uv run eve-mcp`              | Start the MCP server on :8080                          |
+| `uv run jita-mcp`              | Start the MCP server on :8080                          |
 | `python3 scripts/fetch_sde.py` | Idempotent SDE download (pinned by `sde.checksum`)    |
 
 ### SDE
 
 The Static Data Export (~700MB uncompressed) is sourced from Fuzzwork and
 **pinned by MD5 in `sde.checksum`** so dev/CI/prod builds are reproducible.
-`make fetch-sde` is idempotent — it skips the download when the local file
-already matches the pinned MD5. To pull whatever is currently live upstream
-(useful for the SDE-watch workflow), run:
+`python3 scripts/fetch_sde.py` is idempotent — it skips the download when the
+local file already matches the pinned MD5. To pull whatever is currently live
+upstream (useful for the SDE-watch workflow), run:
 
 ```bash
 python3 scripts/fetch_sde.py --version latest
@@ -83,19 +83,21 @@ scheduled GitHub Action that opens a PR when upstream advances.
 ## Project layout
 
 ```
-src/eve_mcp/
+jita_mcp/
   server.py             MCP entry point, tool registration
   config.py             env-driven settings
-  tools/                one module per MCP tool
-  engine/               dogma / fitting engine wrapper (eos)
+  tools/                one module per MCP tool (stubbed)
+  engine/               dogma / fitting engine wrapper (eos, TODO)
   db/sde.py             SDE query helpers (all SQL lives here)
   esi/                  ESI client + price cache
 tests/
   fixtures/             tiny synthetic SDE for unit tests
 scripts/
-  fetch_sde.py          idempotent SDE downloader (TODO)
+  fetch_sde.py          idempotent SDE downloader
 vendor/
-  eos/                  git submodule → forked fitting engine (TODO)
+  pyfa/                 git submodule → pyfa-org/Pyfa (we use vendor/pyfa/eos)
+Dockerfile              4-stage build (sde, eos, app, runtime)
+sde.checksum            pinned Fuzzwork SDE MD5
 ```
 
 ## License

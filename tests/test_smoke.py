@@ -4,19 +4,19 @@ from __future__ import annotations
 
 
 def test_package_imports() -> None:
-    import eve_mcp
+    import jita_mcp
 
-    assert eve_mcp.__version__
+    assert jita_mcp.__version__
 
 
 def test_server_imports() -> None:
-    from eve_mcp.server import mcp
+    from jita_mcp.server import mcp
 
-    assert mcp.name == "eve-mcp"
+    assert mcp.name == "jita-mcp"
 
 
 def test_tools_unimplemented_raise() -> None:
-    from eve_mcp.tools import ship_info
+    from jita_mcp.tools import ship_info
 
     try:
         ship_info.get_ship_info("Condor")

@@ -1,5 +1,5 @@
 [project]
-name = "eve-mcp"
+name = "jita-mcp"
 version = "0.1.0"
 description = "EVE Online fitting MCP server — exposes ship/module/fit tools to Claude and Gemini via remote MCP."
 readme = "README.md"
@@ -38,18 +38,18 @@ dev = [
 ]
 
 [project.scripts]
-eve-mcp = "eve_mcp.server:main"
+jita-mcp = "jita_mcp.server:main"
 
 [project.urls]
-Homepage = "https://github.com/ztucker/eve-mcp"
-Issues = "https://github.com/ztucker/eve-mcp/issues"
+Homepage = "https://github.com/ztucker/jita-mcp"
+Issues = "https://github.com/ztucker/jita-mcp/issues"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["eve_mcp"]
+packages = ["jita_mcp"]
 
 # ---------------------------------------------------------------------------
 # Ruff: linter + formatter
@@ -57,7 +57,7 @@ packages = ["eve_mcp"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["eve_mcp", "tests", "scripts"]
+src = ["jita_mcp", "tests", "scripts"]
 extend-exclude = ["vendor", "data"]
 
 [tool.ruff.lint]
@@ -86,7 +86,7 @@ indent-style = "space"
 # Pyright: type checker
 # ---------------------------------------------------------------------------
 [tool.pyright]
-include = ["eve_mcp", "tests", "scripts"]
+include = ["jita_mcp", "tests", "scripts"]
 exclude = ["**/__pycache__", "vendor", ".venv", "data"]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"

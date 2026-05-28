@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
-from eve_mcp.config import settings
-from eve_mcp.tools import (
+from jita_mcp.config import settings
+from jita_mcp.tools import (
     calculate_fit,
     export_eft,
     modules_by_attribute,
@@ -14,7 +14,7 @@ from eve_mcp.tools import (
 )
 
 mcp = FastMCP(
-    name="eve-mcp",
+    name="jita-mcp",
     instructions=(
         "EVE Online fitting tools. Use these for ship stats, module stats, fit "
         "validation, and prices. Do not estimate from training knowledge — EVE data "

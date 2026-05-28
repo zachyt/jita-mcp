@@ -308,7 +308,7 @@ wheels = [
 ]
 
 [[package]]
-name = "eve-mcp"
+name = "jita-mcp"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

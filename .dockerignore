@@ -31,7 +31,7 @@ tests/
 # Docs / meta — kept tiny things that pyproject references; runtime
 # stage doesn't COPY them so they never reach the final image.
 LICENSE
-eve_mcp_handoff.md
+jita_mcp_handoff.md
 .pre-commit-config.yaml
 .gitignore
 .gitmodules

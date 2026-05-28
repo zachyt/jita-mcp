@@ -1,6 +1,6 @@
 """MCP tool implementations."""
 
-from eve_mcp.tools import (
+from jita_mcp.tools import (
     calculate_fit,
     export_eft,
     modules_by_attribute,

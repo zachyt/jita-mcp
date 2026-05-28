@@ -6,7 +6,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-from eve_mcp.config import settings
+from jita_mcp.config import settings
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS price_cache (

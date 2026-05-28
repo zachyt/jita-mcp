@@ -11,7 +11,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from eve_mcp.config import settings
+from jita_mcp.config import settings
 
 
 class SDE:

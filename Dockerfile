@@ -53,7 +53,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
 
 # Project layer: invalidates only when our package source changes.
-COPY eve_mcp ./eve_mcp
+COPY jita_mcp ./jita_mcp
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
@@ -67,10 +67,10 @@ FROM python:${PYTHON_VERSION}-slim AS runtime
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH" \
-    EVE_MCP_SDE_PATH=/app/data/sde.sqlite \
-    EVE_MCP_PRICE_CACHE_PATH=/app/data/price_cache.sqlite \
-    EVE_MCP_HOST=0.0.0.0 \
-    EVE_MCP_PORT=8080
+    JITA_MCP_SDE_PATH=/app/data/sde.sqlite \
+    JITA_MCP_PRICE_CACHE_PATH=/app/data/price_cache.sqlite \
+    JITA_MCP_HOST=0.0.0.0 \
+    JITA_MCP_PORT=8080
 
 WORKDIR /app
 
@@ -78,7 +78,7 @@ WORKDIR /app
 COPY --from=sde /work/data/sde.sqlite ./data/sde.sqlite
 COPY --from=eos /work/eos ./vendor/pyfa/eos
 COPY --from=app /app/.venv ./.venv
-COPY --from=app /app/eve_mcp ./eve_mcp
+COPY --from=app /app/jita_mcp ./jita_mcp
 
 # Non-root user for the running process.
 RUN useradd --system --uid 1000 --no-create-home eve \
@@ -87,4 +87,4 @@ USER eve
 
 EXPOSE 8080
 
-CMD ["uvicorn", "eve_mcp.server:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "jita_mcp.server:app", "--host", "0.0.0.0", "--port", "8080"]

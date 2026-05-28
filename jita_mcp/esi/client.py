@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import aiohttp
 
-from eve_mcp.config import settings
+from jita_mcp.config import settings
 
 
 async def fetch_min_sell_price(type_id: int) -> float | None:
