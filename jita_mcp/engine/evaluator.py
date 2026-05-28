@@ -103,6 +103,19 @@ class FitEvaluator:
         self._fit = None
         self._candidate_idx = None
 
+    def score_baseline(self) -> FitMetrics:
+        """Compute metrics for the baseline fit (no candidate).
+
+        Use this to validate a fully-assembled fit: set_baseline with every
+        module, then score_baseline and inspect FitMetrics.fits / cpu_used /
+        pg_used / ehp / dps. Does NOT reuse the cached Fit from score_module
+        — score_baseline builds a fresh Fit with no swappable slot.
+        """
+        fit = self._fresh_fit()
+        self._add_baseline(fit)
+        fit.calculateModifiedAttributes()
+        return self._read_metrics(fit)
+
     def score_module(
         self,
         module_name: str,
