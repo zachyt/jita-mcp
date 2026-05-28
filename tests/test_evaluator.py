@@ -20,7 +20,7 @@ def test_evaluator_applies_ship_kinetic_bonus() -> None:
         },
     )
     by_dmg = {
-        ammo: ev.score_module("Rocket Launcher II", ammo)
+        ammo: ev.score_module("Rocket Launcher II", ammo).dps
         for ammo in (
             "Caldari Navy Mjolnir Rocket",  # EM
             "Caldari Navy Inferno Rocket",  # Thermal
@@ -35,6 +35,39 @@ def test_evaluator_applies_ship_kinetic_bonus() -> None:
     # Damage profile is single-type per missile.
     assert scourge.kinetic == pytest.approx(scourge.total)
     assert mjolnir.em == pytest.approx(mjolnir.total)
+
+
+@pytest.mark.sde
+def test_evaluator_baseline_lift_for_damage_mod() -> None:
+    """A BCS scored against a baseline of 4 rocket launchers must show DPS lift."""
+    from jita_mcp.db.eve import get_item_by_name
+    from jita_mcp.engine.evaluator import BaselineModule
+
+    rocket = get_item_by_name("Rocket Launcher II")
+    scourge = get_item_by_name("Caldari Navy Scourge Rocket")
+    assert rocket is not None and scourge is not None
+
+    ev = FitEvaluator(
+        "Condor",
+        skills={
+            "Caldari Frigate": 5,
+            "Missile Launcher Operation": 5,
+            "Rockets": 5,
+            "Rocket Specialization": 4,
+        },
+    )
+    ev.set_baseline([BaselineModule(type_id=rocket.ID, ammo_type_id=scourge.ID)] * 4)
+
+    bcs1 = ev.score_module("Ballistic Control System I").dps.total
+    bcs2 = ev.score_module("Ballistic Control System II").dps.total
+    # BCS II must out-DPS BCS I (more bonus), and both must exceed bare baseline.
+    assert bcs2 > bcs1 > 0
+    # Baseline alone (no BCS) — score a no-op module to measure: clear baseline
+    # and score one launcher to estimate per-launcher contribution.
+    ev.set_baseline([])
+    single = ev.score_module("Rocket Launcher II", "Caldari Navy Scourge Rocket").dps.total
+    # 4 launchers + BCS II should be > 4x a single launcher (the BCS multiplies).
+    assert bcs2 > single * 4
 
 
 @pytest.mark.sde

@@ -161,6 +161,129 @@ def get_item_by_name(name: str) -> Any | None:
     )
 
 
+# Slot type -> effect name in item.effects that marks a module as belonging
+# to that slot.
+_SLOT_EFFECT_NAME = {
+    "high": "hiPower",
+    "med": "medPower",
+    "low": "loPower",
+    "rig": "rigSlot",
+    "subsystem": "subSystem",
+}
+
+# damage_type -> dgmattribs.attributeName used to read that damage type on an ammo Item.
+_DAMAGE_ATTR_NAME = {
+    "em": "emDamage",
+    "thermal": "thermalDamage",
+    "kinetic": "kineticDamage",
+    "explosive": "explosiveDamage",
+}
+
+
+def query_modules_in_groups(
+    group_names: list[str],
+    slot: str,
+    exclude: list[int] | None = None,
+    min_meta: int = 0,
+    max_meta: int = 14,
+) -> list[Any]:
+    """Return published Item objects whose group name is in `group_names`,
+    that have the slot-effect for the requested slot, within the meta-level
+    range, excluding any typeIDs in `exclude`.
+
+    Slot must be one of: high / med / low / rig / subsystem.
+    """
+    from eos.gamedata import Item
+
+    if slot not in _SLOT_EFFECT_NAME:
+        raise ValueError(f"slot must be one of {sorted(_SLOT_EFFECT_NAME)}, got {slot!r}")
+    slot_effect_name = _SLOT_EFFECT_NAME[slot]
+    exclude = exclude or []
+
+    Q: Any = Item
+
+    # First narrow by group + meta + published (cheap). Then filter by slot
+    # effect in Python — joining dgmtypeeffects in SQL is uglier than
+    # checking item.effects after a small candidate query.
+    query = (
+        eos.db.gamedata_session.query(Item)
+        .join(Q.group)
+        .filter(Q.published == True)  # noqa: E712
+        .filter(
+            Q.group.has(name=group_names[0]) if len(group_names) == 1 else _group_in(group_names)
+        )
+        .filter(Q.metaLevel >= min_meta)
+        .filter(Q.metaLevel <= max_meta)
+    )
+    if exclude:
+        query = query.filter(~Q.ID.in_(exclude))
+
+    candidates = query.all()
+    return [c for c in candidates if slot_effect_name in c.effects]
+
+
+def _group_in(group_names: list[str]) -> Any:
+    from eos.gamedata import Group, Item
+
+    GQ: Any = Group
+    IQ: Any = Item
+    return IQ.group.has(GQ.name.in_(group_names))
+
+
+def find_best_ammo(weapon_item: Any, damage_type: str | None = None) -> Any | None:
+    """Pick the highest-damage ammo a weapon can accept, optionally filtered to a
+    specific damage type. Returns the Item or None if the weapon doesn't take
+    charges (or has no matching ammo).
+
+    "Best" = max attribute value. EVE's faction-navy ammo (Caldari Navy …) has
+    the highest raw damage of any T1-equivalent and reliably wins this scoring.
+    Skills are not considered here — if the character can't actually use the
+    ammo, the score_module call later will reflect zero DPS naturally.
+    """
+    from eos.gamedata import Item
+
+    # Charge groups live on the weapon as chargeGroup1..5 attributes.
+    cg_ids: list[int] = []
+    for i in range(1, 6):
+        attr = weapon_item.attributes.get(f"chargeGroup{i}")
+        if attr is not None and attr.value:
+            cg_ids.append(int(attr.value))
+    if not cg_ids:
+        return None
+
+    # Many launchers also gate by chargeSize (1=small / 2=medium / 3=large / 4=xl).
+    cs_attr = weapon_item.attributes.get("chargeSize")
+    charge_size = int(cs_attr.value) if cs_attr is not None else None
+
+    Q: Any = Item
+    candidates = (
+        eos.db.gamedata_session.query(Item)
+        .filter(Q.groupID.in_(cg_ids))
+        .filter(Q.published == True)  # noqa: E712
+        .all()
+    )
+    if charge_size is not None:
+        candidates = [
+            c
+            for c in candidates
+            if c.attributes.get("chargeSize") is None
+            or int(c.attributes["chargeSize"].value) == charge_size
+        ]
+
+    def score(c: Any) -> float:
+        if damage_type:
+            attr = c.attributes.get(_DAMAGE_ATTR_NAME[damage_type])
+            return float(attr.value) if attr else 0.0
+        return sum(
+            float(c.attributes[a].value) if c.attributes.get(a) else 0.0
+            for a in _DAMAGE_ATTR_NAME.values()
+        )
+
+    candidates = [c for c in candidates if score(c) > 0]
+    candidates.sort(key=score, reverse=True)
+    return candidates[0] if candidates else None
+
+
 def get_ship_by_name(name: str) -> Ship | None:
     """Look up a published ship by exact case-insensitive name.
 

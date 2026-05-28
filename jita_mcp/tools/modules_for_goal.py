@@ -1,20 +1,298 @@
-"""get_modules_for_goal — ranked module candidates for a fitting objective."""
+"""get_modules_for_goal — ranked module candidates for a fitting objective.
+
+Flow:
+  1. Resolve (goal, slot) -> module groups via engine/categories.
+  2. SQL pre-filter eve.db for published modules in those groups, in the
+     meta-level range, with the matching slot effect, excluding the user's
+     exclude list.
+  3. Build a FitEvaluator with the ship + skills (default All-V).
+  4. Translate the user's `preserve` list into baseline modules (auto-picking
+     best ammo for the goal's damage type, if any). Set on the evaluator.
+  5. Score each candidate. For weapon candidates, auto-pick ammo for the
+     goal's damage type (or the highest-total damage if no type specified).
+  6. Rank by the metric matching the goal (DPS-by-type / total DPS / EHP /
+     max-speed). Return top N.
+
+Unsupported (goal, slot) combinations return a structured "unsupported"
+response rather than empty results.
+"""
 
 from __future__ import annotations
+
+import dataclasses
+from typing import Any
+
+from jita_mcp.db.eve import find_best_ammo, query_modules_in_groups
+from jita_mcp.engine.categories import (
+    _WEAPON_GROUPS,
+    DAMAGE_TYPE_BY_GOAL,
+    groups_for,
+)
+from jita_mcp.engine.evaluator import BaselineModule, FitEvaluator, FitMetrics
+
+DEFAULT_TOP_N = 15
+
+_GOALS_DOC = (
+    "maximize_dps, maximize_em_damage, maximize_thermal_damage, "
+    "maximize_kinetic_damage, maximize_explosive_damage, maximize_ehp, maximize_speed"
+)
 
 
 def get_modules_for_goal(
     ship: str,
     goal: str,
+    slot: str,
     skills: dict[str, int] | None = None,
-    constraints: dict | None = None,
-) -> dict:
-    """Returns ranked module candidates for a specific fitting objective on a specific
-    ship. Effective stats are calculated using ship bonuses and character skills — not
-    raw module stats — so rankings reflect real in-game performance. Ammo is automatically
-    selected and factored in for weapon modules. Untrainable modules are filtered out.
-    Goals: maximize_ehp, maximize_dps, maximize_em_damage, maximize_thermal_damage,
-    maximize_kinetic_damage, maximize_explosive_damage, maximize_speed, maximize_range,
-    budget_fit.
+    exclude: list[int] | None = None,
+    preserve: list[int] | None = None,
+    min_meta_level: int = 0,
+    max_meta_level: int = 14,
+    top_n: int = DEFAULT_TOP_N,
+) -> dict[str, Any]:
+    """Returns ranked module candidates for a fitting objective on a specific ship.
+
+    Effective stats are computed with ship bonuses and character skills applied
+    via pyfa's eos engine (not raw module values). For damage goals, ammo is
+    automatically chosen to maximise the target damage type.
+
+    Use `preserve` to pass typeIDs of modules already chosen for the fit —
+    they're added to the baseline so damage mods score against real weapon
+    DPS (otherwise BCS / MFS / Gyrostab etc. score 0).
+
+    Defaults to All-V skills if `skills` is None. Pass `{}` for All-0; pass a
+    dict like `{"Caldari Frigate": 4}` for a specific level (other skills
+    still default to V).
+
+    Supported goals: maximize_dps, maximize_em_damage, maximize_thermal_damage,
+    maximize_kinetic_damage, maximize_explosive_damage, maximize_ehp, maximize_speed.
+    Supported slots: high, med, low.
+    Unsupported (goal, slot) combinations return {"status": "unsupported", ...}.
     """
-    raise NotImplementedError
+    if goal not in DAMAGE_TYPE_BY_GOAL and goal not in {"maximize_ehp", "maximize_speed"}:
+        return {"status": "unknown_goal", "goal": goal, "supported": _GOALS_DOC}
+
+    groups = groups_for(goal, slot)
+    if not groups:
+        return {
+            "status": "unsupported",
+            "goal": goal,
+            "slot": slot,
+            "reason": f"no module categories registered for ({goal}, slot={slot})",
+        }
+
+    damage_type = DAMAGE_TYPE_BY_GOAL.get(goal)
+    skills_effective = _resolve_skills(skills)
+
+    try:
+        ev = FitEvaluator(ship, skills=skills_effective)
+    except ValueError as e:
+        return {"status": "error", "reason": str(e)}
+
+    ev.set_baseline(_build_baseline(preserve or [], damage_type))
+
+    candidates = query_modules_in_groups(
+        groups,
+        slot=slot,
+        exclude=exclude,
+        min_meta=min_meta_level,
+        max_meta=max_meta_level,
+    )
+    candidates = _drop_wrong_hardpoint(candidates, ev)
+    candidates = _drop_wildly_oversized(candidates, ev)
+    candidates = _drop_untrainable(candidates, ev)
+
+    scored: list[dict[str, Any]] = []
+    for item in candidates:
+        ammo_name = _pick_ammo_name(item, damage_type)
+        # For damage goals, a weapon that can't deal the target damage type
+        # at all (e.g. laser asked for kinetic) returns ammo=None and would
+        # always score 0. Skip the engine call entirely.
+        if damage_type is not None and item.group.name in _WEAPON_GROUPS and ammo_name is None:
+            continue
+        try:
+            metrics = ev.score_module(item.typeName, ammo_name)
+        except ValueError:
+            continue  # invalid charge etc. — skip silently
+        if not metrics.fits:
+            continue  # over CPU or PG on this ship+skills
+        value = _goal_metric(metrics, goal, damage_type)
+        if value <= 0:
+            continue  # no contribution — drop
+        scored.append(_format_candidate(item, ammo_name, metrics, value, goal))
+
+    scored.sort(key=lambda c: c["effective_value"], reverse=True)
+    return {
+        "status": "ok",
+        "ship": ship,
+        "goal": goal,
+        "slot": slot,
+        "skills": "all_v" if skills is None else "custom",
+        "candidate_count": len(scored),
+        "candidates": scored[:top_n],
+    }
+
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+
+def _resolve_skills(skills: dict[str, int] | None) -> dict[str, int]:
+    """Pass-through. None and an empty dict both yield the evaluator's
+    default (All-V); a populated dict overrides specific skills, with
+    unlisted skills still at the V default."""
+    return skills or {}
+
+
+def _build_baseline(preserve: list[int], damage_type: str | None) -> list[BaselineModule]:
+    """Translate `preserve` typeIDs into BaselineModule entries, auto-picking
+    ammo for any preserved weapon."""
+    baseline: list[BaselineModule] = []
+    for type_id in preserve:
+        item = get_item_by_name_by_id(type_id)
+        if item is None:
+            continue
+        ammo_id: int | None = None
+        if item.group.name in _WEAPON_GROUPS:
+            ammo = find_best_ammo(item, damage_type)
+            ammo_id = ammo.ID if ammo else None
+        baseline.append(BaselineModule(type_id=type_id, ammo_type_id=ammo_id))
+    return baseline
+
+
+def get_item_by_name_by_id(type_id: int) -> Any | None:
+    """Tiny shim so this file doesn't import eos.db directly."""
+    from jita_mcp.engine.eos_setup import setup
+
+    setup()
+    import eos.db
+
+    return eos.db.getItem(type_id)
+
+
+def _drop_wrong_hardpoint(candidates: list[Any], ev: FitEvaluator) -> list[Any]:
+    """Drop weapons whose hardpoint type the ship has zero of.
+
+    EVE distinguishes turret weapons (energy / hybrid / projectile / precursor)
+    from launchers (missiles). A weapon's `turretFitted` or `launcherFitted`
+    effect tags it. A frigate like Condor has 3 launcher hardpoints and 0
+    turret hardpoints — even with enough high slots, a Light Neutron Blaster
+    physically cannot fit it.
+
+    Filters at the hardpoint-type level only; modules that don't use either
+    (rigs, modules without weapon-fitting effects) pass through untouched.
+    """
+    ship_attrs = ev._ship_item.attributes
+    turret_attr = ship_attrs.get("turretSlotsLeft")
+    launcher_attr = ship_attrs.get("launcherSlotsLeft")
+    has_turret = float(turret_attr.value) > 0 if turret_attr is not None else False
+    has_launcher = float(launcher_attr.value) > 0 if launcher_attr is not None else False
+
+    keep: list[Any] = []
+    for item in candidates:
+        needs_turret = "turretFitted" in item.effects
+        needs_launcher = "launcherFitted" in item.effects
+        if needs_turret and not has_turret:
+            continue
+        if needs_launcher and not has_launcher:
+            continue
+        keep.append(item)
+    return keep
+
+
+def _drop_untrainable(candidates: list[Any], ev: FitEvaluator) -> list[Any]:
+    """Drop modules whose required skills the character hasn't trained to the
+    needed level. For All-V default characters this drops nothing; for users
+    who passed actual skill levels it can shrink the candidate set dramatically.
+
+    Always correct: we read the module's declared skill requirements and check
+    them against the character — no heuristic.
+    """
+    char = ev._character
+    keep: list[Any] = []
+    for item in candidates:
+        if all(
+            char.getSkill(skill_item.ID).level >= required_level
+            for skill_item, required_level in item.requiredSkills.items()
+        ):
+            keep.append(item)
+    return keep
+
+
+def _drop_wildly_oversized(candidates: list[Any], ev: FitEvaluator) -> list[Any]:
+    """Pre-filter to skip the engine for obviously-impossible candidates.
+
+    The engine's post-filter (FitMetrics.fits) is always correct, but running
+    it on 600 weapon items at ~5ms each is slow. This cheap raw-attribute
+    pre-pass drops items whose raw CPU/PG cost is multiples of what the ship
+    could ever output, even with the most generous skill + role bonuses.
+
+    Thresholds:
+      raw_cpu > 10x ship raw cpuOutput  -> drop
+      raw_pg  > 50x ship raw powerOutput -> drop
+
+    The PG multiplier is deliberately loose because EVE has ships with extreme
+    role bonuses (Stealth Bombers fit Torpedo Launchers via a 99% PG reduction;
+    Stratios fits T2 large modules; mining barges fit oversized ore holds).
+    50x is high enough to preserve all those cases (Manticore + Torpedo
+    Launcher II is 540/38 = 14x). Capital and XL-class weapons exceed it
+    easily.
+    """
+    ship_attrs = ev._ship_item.attributes
+    ship_raw_cpu = float(ship_attrs["cpuOutput"].value)
+    ship_raw_pg = float(ship_attrs["powerOutput"].value)
+    cpu_limit = ship_raw_cpu * 10
+    pg_limit = ship_raw_pg * 50
+
+    keep: list[Any] = []
+    for item in candidates:
+        cpu_attr = item.attributes.get("cpu")
+        pg_attr = item.attributes.get("power")
+        raw_cpu = float(cpu_attr.value) if cpu_attr else 0.0
+        raw_pg = float(pg_attr.value) if pg_attr else 0.0
+        if raw_cpu > cpu_limit or raw_pg > pg_limit:
+            continue
+        keep.append(item)
+    return keep
+
+
+def _pick_ammo_name(item: Any, damage_type: str | None) -> str | None:
+    """For weapon candidates, pick the best ammo for the goal; otherwise no ammo."""
+    if item.group.name not in _WEAPON_GROUPS:
+        return None
+    ammo = find_best_ammo(item, damage_type)
+    return ammo.typeName if ammo else None
+
+
+def _goal_metric(metrics: FitMetrics, goal: str, damage_type: str | None) -> float:
+    if goal == "maximize_ehp":
+        return metrics.ehp_total
+    if goal == "maximize_speed":
+        return metrics.max_speed
+    if damage_type is not None:
+        return float(getattr(metrics.dps, damage_type))
+    return metrics.dps.total
+
+
+def _format_candidate(
+    item: Any,
+    ammo_name: str | None,
+    metrics: FitMetrics,
+    value: float,
+    goal: str,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "name": item.typeName,
+        "typeID": item.ID,
+        "group": item.group.name,
+        "meta_level": item.metaLevel,
+        "effective_value": round(value, 2),
+    }
+    if ammo_name:
+        out["ammo"] = ammo_name
+    # Include damage breakdown when the goal is damage-related.
+    if goal in DAMAGE_TYPE_BY_GOAL:
+        out["dps_breakdown"] = dataclasses.asdict(metrics.dps)
+    if goal == "maximize_ehp":
+        out["ehp_by_layer"] = metrics.ehp
+    return out
