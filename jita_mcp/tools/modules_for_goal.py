@@ -138,6 +138,7 @@ async def get_modules_for_goal(
         max_meta=max_meta_level,
     )
     candidates = _drop_wrong_hardpoint(candidates, ev)
+    candidates = _drop_wrong_ship_only(candidates, ev)
     if not raw:
         candidates = _drop_too_small_turrets(candidates, ev)
     candidates = _drop_wildly_oversized(candidates, ev)
@@ -285,6 +286,22 @@ def _drop_too_small_turrets(candidates: list[Any], ev: FitEvaluator) -> list[Any
     for item in candidates:
         cs_attr = item.attributes.get("chargeSize")
         if cs_attr is not None and float(cs_attr.value) < min_size:
+            continue
+        keep.append(item)
+    return keep
+
+
+def _drop_wrong_ship_only(candidates: list[Any], ev: FitEvaluator) -> list[Any]:
+    """Drop modules that hardcode a specific ship (via fitsToShipType) where
+    that ship isn't ours. Mainly catches T3 subsystems — every Tengu / Loki /
+    Proteus / Legion subsystem declares its parent ship's typeID and is
+    physically refused by any other hull.
+    """
+    ship_id = ev._ship_item.ID
+    keep: list[Any] = []
+    for item in candidates:
+        attr = item.attributes.get("fitsToShipType")
+        if attr is not None and int(attr.value) != ship_id:
             continue
         keep.append(item)
     return keep

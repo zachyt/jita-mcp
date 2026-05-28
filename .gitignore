@@ -31,17 +31,47 @@ htmlcov/
 # Editor
 .idea/
 .vscode/
+*.iml
 *.swp
 *.swo
+*~
 
 # OS
 .DS_Store
+._*
 Thumbs.db
+Desktop.ini
 
 # Environment
 .env
 .env.local
 .env.*.local
+.envrc
+
+# Logs / runtime state
+*.log
+*.pid
+
+# Backup / merge debris
+*.bak
+*.orig
+*.tmp
+
+# Coverage formats beyond htmlcov
+coverage.xml
+*.cover
+
+# Defensive: keep stray lockfiles from other Python tools from sneaking in
+Pipfile.lock
+poetry.lock
+pdm.lock
+
+# Defensive: in case JS tooling lands (mcp-inspector via npx, etc.)
+node_modules/
+
+# Docker local overrides
+docker-compose.override.yml
+compose.override.yaml
 
 # Data — never commit the full SDE (~700MB) or pyfa-built eve.db (~94MB)
 data/

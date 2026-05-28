@@ -86,6 +86,17 @@ GOAL_GROUPS: dict[tuple[str, str], list[str]] = {
     # Speed
     ("maximize_speed", "med"): _MED_SPEED_GROUPS,
     ("maximize_speed", "low"): _LOW_SPEED_GROUPS,
+    # T3 Strategic Cruiser subsystems. Each subsystem transforms the ship —
+    # different defensive subsystem = different effective EHP, different
+    # offensive = different effective DPS, etc. Scoring them via the engine
+    # captures these transformations correctly.
+    ("maximize_dps", "subsystem"): ["Offensive Subsystem"],
+    ("maximize_em_damage", "subsystem"): ["Offensive Subsystem"],
+    ("maximize_thermal_damage", "subsystem"): ["Offensive Subsystem"],
+    ("maximize_kinetic_damage", "subsystem"): ["Offensive Subsystem"],
+    ("maximize_explosive_damage", "subsystem"): ["Offensive Subsystem"],
+    ("maximize_ehp", "subsystem"): ["Defensive Subsystem"],
+    ("maximize_speed", "subsystem"): ["Propulsion Subsystem"],
 }
 
 
