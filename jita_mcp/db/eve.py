@@ -141,23 +141,33 @@ class Ship:
 # ---------------------------------------------------------------------------
 
 
-def get_ship_by_name(name: str) -> Ship | None:
-    """Look up a published ship by exact case-insensitive name.
+def get_item_by_name(name: str) -> Any | None:
+    """Look up any published Item by exact case-insensitive name.
 
-    Returns None if no ship matches. No fuzzy matching by design — if the
-    LLM submits a misspelling, "no match" is the correct signal to retry.
+    Returns the raw eos Item ORM object (or None) — the caller does whatever
+    they need with it. Generic primitive; the typed wrappers below build on
+    this for ships, modules, ammo, etc.
     """
     from eos.gamedata import Item
 
     # SQLAlchemy 1.4 classical mapping doesn't expose Column type info; pyright
     # can't see Item.typeName / Item.published as queryable. Cast locally.
     Q: Any = Item
-    item = (
+    return (
         eos.db.gamedata_session.query(Item)
         .filter(Q.typeName.ilike(name))
         .filter(Q.published == True)  # noqa: E712 — SQLAlchemy needs ==
         .first()
     )
+
+
+def get_ship_by_name(name: str) -> Ship | None:
+    """Look up a published ship by exact case-insensitive name.
+
+    Returns None if no ship matches. No fuzzy matching by design — if the
+    LLM submits a misspelling, "no match" is the correct signal to retry.
+    """
+    item = get_item_by_name(name)
     if item is None or item.category.name != SHIP_CATEGORY_NAME:
         return None
 
