@@ -37,9 +37,18 @@ jita_mcp_handoff.md
 .gitmodules
 .python-version
 
-# Pyfa: send only the eos subdir, exclude the ~265MB of GUI assets
+# Pyfa: send only the bits we need (eos source, db_update.py, staticdata,
+# and the root utils/ package — eos.utils.cycles does `from utils.repr
+# import makeReprStr` against pyfa's top-level utils). Skip the ~250MB of
+# GUI assets.
 vendor/pyfa/**
 !vendor/pyfa/eos/**
+!vendor/pyfa/utils/**
+!vendor/pyfa/staticdata/**
+!vendor/pyfa/db_update.py
+# Skip eve.db itself if a dev has built it locally; the pyfa stage builds
+# a fresh one from staticdata.
+vendor/pyfa/eve.db
 
 # Git internals
 .git/
