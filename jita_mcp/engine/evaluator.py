@@ -17,7 +17,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from jita_mcp.db.eve import get_item_by_name
+from jita_mcp.db.eve import (
+    ARMOR_RESIST_ATTRS,
+    CAPACITY_ATTRS,
+    SHIELD_RESIST_ATTRS,
+    STRUCTURE_RESIST_ATTRS,
+    get_item_by_name,
+)
 from jita_mcp.engine.eos_setup import setup
 
 setup()
@@ -43,22 +49,53 @@ class DamageStats:
 @dataclass
 class FitMetrics:
     """Per-fit metrics, all computed in one calculateModifiedAttributes pass.
-    Callers pick whichever field matches the goal they're ranking by."""
+    Callers pick whichever field matches the goal they're ranking by.
 
+    All resource totals (capacities, CPU/PG/cap/etc) are *bonused* values
+    — modules and rigs that boost them are already applied.
+    """
+
+    # DPS
     dps: DamageStats
+
+    # Tank
     ehp: dict[str, float]  # {"shield", "armor", "hull"} — total EHP per layer
     ehp_total: float
-    max_speed: float
-    cpu_used: float  # post-skill module CPU consumption
+    resists: dict[str, dict[str, float]]  # layer -> damage type -> percent 0-100
+
+    # Fitting resources
+    cpu_used: float
     pg_used: float
-    calibration_used: float  # rig calibration consumption
-    cpu_total: float  # post-skill ship CPU output (bonused)
+    calibration_used: float
+    cpu_total: float
     pg_total: float
-    calibration_total: float  # ship's upgradeCapacity (calibration pool)
-    drone_bay_used: float  # m³ consumed by drones in the bay
-    drone_bay_total: float  # ship's bonused drone bay capacity
-    drone_bandwidth_used: float  # Mbit/s consumed by ACTIVE drones
-    drone_bandwidth_total: float  # ship's bonused drone bandwidth
+    calibration_total: float
+    drone_bay_used: float
+    drone_bay_total: float
+    drone_bandwidth_used: float
+    drone_bandwidth_total: float
+
+    # Capacities (cargo + drones + specialised holds). Values are bonused —
+    # cargo expanders, drone bay rigs etc. already applied. Specialised holds
+    # only included if the ship actually has one (>0).
+    capacities: dict[str, float]
+
+    # Capacitor
+    cap_capacity: float
+    cap_stable: bool
+    cap_state_pct: float  # % the cap stabilises at (if stable) or current
+    cap_depletes_at_seconds: float | None  # None if stable
+    cap_recharge_seconds: float  # full-cycle recharge time
+
+    # Mobility
+    max_speed: float
+    align_time: float
+    agility: float
+    mass: float
+
+    # Sensor / signature
+    scan_resolution: float  # higher = locks faster
+    signature_radius: float  # smaller = harder to hit / lock
 
     @property
     def fits(self) -> bool:
@@ -284,6 +321,29 @@ class FitEvaluator:
     def _read_metrics(self, fit: Any) -> FitMetrics:
         dps_t = fit.getTotalDps()
         ehp = dict(fit.ehp)
+        ship = fit.ship
+
+        def attr(key: str, default: float = 0.0) -> float:
+            v = ship.getModifiedItemAttr(key)
+            return float(v) if v is not None else default
+
+        # Resists are stored as damage *multipliers* — flip to 0-100 percent.
+        def resist(name: str) -> float:
+            v = ship.getModifiedItemAttr(name)
+            return round((1.0 - float(v)) * 100, 1) if v is not None else 0.0
+
+        # Capacities: cargo + drone bay + drone bandwidth always emitted;
+        # specialised holds only if the ship has them (>0). Values are bonused.
+        capacities: dict[str, float] = {}
+        for src, key in CAPACITY_ATTRS.items():
+            val = attr(src)
+            if key in {"cargo", "drone_bay", "drone_bandwidth"} or val > 0:
+                capacities[key] = val
+
+        cap_stable = bool(getattr(fit, "capStable", False))
+        cap_state_pct = float(getattr(fit, "capState", 0))
+        cap_depletes_at: float | None = None if cap_stable else float(getattr(fit, "capState", 0))
+
         return FitMetrics(
             dps=DamageStats(
                 em=float(dps_t.em),
@@ -294,15 +354,34 @@ class FitEvaluator:
             ),
             ehp={k: float(v) for k, v in ehp.items()},
             ehp_total=float(sum(ehp.values())),
-            max_speed=float(fit.maxSpeed),
+            resists={
+                layer: {dmg: resist(src) for src, dmg in attr_map.items()}
+                for layer, attr_map in (
+                    ("shield", SHIELD_RESIST_ATTRS),
+                    ("armor", ARMOR_RESIST_ATTRS),
+                    ("structure", STRUCTURE_RESIST_ATTRS),
+                )
+            },
             cpu_used=float(getattr(fit, "cpuUsed", 0)),
             pg_used=float(getattr(fit, "pgUsed", 0)),
             calibration_used=float(getattr(fit, "calibrationUsed", 0)),
-            cpu_total=float(fit.ship.getModifiedItemAttr("cpuOutput") or 0),
-            pg_total=float(fit.ship.getModifiedItemAttr("powerOutput") or 0),
-            calibration_total=float(fit.ship.getModifiedItemAttr("upgradeCapacity") or 0),
+            cpu_total=attr("cpuOutput"),
+            pg_total=attr("powerOutput"),
+            calibration_total=attr("upgradeCapacity"),
             drone_bay_used=float(getattr(fit, "droneBayUsed", 0)),
-            drone_bay_total=float(fit.ship.getModifiedItemAttr("droneCapacity") or 0),
+            drone_bay_total=attr("droneCapacity"),
             drone_bandwidth_used=float(getattr(fit, "droneBandwidthUsed", 0)),
-            drone_bandwidth_total=float(fit.ship.getModifiedItemAttr("droneBandwidth") or 0),
+            drone_bandwidth_total=attr("droneBandwidth"),
+            capacities=capacities,
+            cap_capacity=attr("capacitorCapacity"),
+            cap_stable=cap_stable,
+            cap_state_pct=cap_state_pct,
+            cap_depletes_at_seconds=cap_depletes_at,
+            cap_recharge_seconds=float(getattr(fit, "capRecharge", 0)),
+            max_speed=float(fit.maxSpeed),
+            align_time=float(getattr(fit, "alignTime", 0)),
+            agility=attr("agility"),
+            mass=attr("mass"),
+            scan_resolution=attr("scanResolution"),
+            signature_radius=attr("signatureRadius"),
         )

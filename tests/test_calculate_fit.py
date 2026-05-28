@@ -31,7 +31,12 @@ def test_valid_condor_fit() -> None:
     assert res["fitting_used"]["powergrid"] <= res["fitting_total"]["powergrid"]
     assert res["dps"]["kinetic"] > 0  # ship bonus applies
     assert res["ehp_total"] > 0
-    assert res["max_speed"] > 400  # AB boosts above base ~400 m/s
+    assert res["mobility"]["max_speed"] > 400  # AB boosts above base ~400 m/s
+    # The new expanded shape: capacities + resists + capacitor + sensor all present.
+    assert "cargo" in res["capacities"]
+    assert "shield" in res["resists"]
+    assert res["capacitor"]["capacity"] > 0
+    assert res["sensor"]["signature_radius"] > 0
 
 
 @pytest.mark.sde

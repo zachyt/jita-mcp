@@ -122,8 +122,13 @@ def calculate_fit(
             "drone_bay": round(metrics.drone_bay_total, 2),
             "drone_bandwidth": round(metrics.drone_bandwidth_total, 2),
         },
+        # Bonused / effective capacities. cargo + drone bay always present;
+        # specialised holds only when the ship has them. Reflects whatever
+        # cargo-expander modules / rigs in the fit have done to the values.
+        "capacities": {k: round(v, 2) for k, v in metrics.capacities.items()},
         "ehp": {k: round(v) for k, v in metrics.ehp.items()},
         "ehp_total": round(metrics.ehp_total),
+        "resists": metrics.resists,
         "dps": {
             "em": round(metrics.dps.em, 2),
             "thermal": round(metrics.dps.thermal, 2),
@@ -131,7 +136,27 @@ def calculate_fit(
             "explosive": round(metrics.dps.explosive, 2),
             "total": round(metrics.dps.total, 2),
         },
-        "max_speed": round(metrics.max_speed),
+        "capacitor": {
+            "capacity": round(metrics.cap_capacity, 2),
+            "stable": metrics.cap_stable,
+            "state_pct": round(metrics.cap_state_pct, 2),
+            "depletes_at_seconds": (
+                round(metrics.cap_depletes_at_seconds, 2)
+                if metrics.cap_depletes_at_seconds is not None
+                else None
+            ),
+            "recharge_seconds": round(metrics.cap_recharge_seconds, 2),
+        },
+        "mobility": {
+            "max_speed": round(metrics.max_speed),
+            "align_time": round(metrics.align_time, 2),
+            "agility": round(metrics.agility, 3),
+            "mass": round(metrics.mass),
+        },
+        "sensor": {
+            "scan_resolution": round(metrics.scan_resolution, 1),
+            "signature_radius": round(metrics.signature_radius, 1),
+        },
         "errors": errors,
     }
 
