@@ -32,6 +32,12 @@ from jita_mcp.engine.evaluator import BaselineModule, FitEvaluator, FitMetrics
 
 DEFAULT_TOP_N = 15
 
+# Per-group: after this many consecutive over-CPU/PG/calibration candidates,
+# stop scoring the rest of that group. 3 is enough margin for occasional
+# out-of-order entries within a group (which rarely happens — modules in a
+# group are nearly always monotonic in resource cost).
+_PER_GROUP_MISS_ABORT = 3
+
 _GOALS_DOC = (
     "maximize_dps, maximize_em_damage, maximize_thermal_damage, "
     "maximize_kinetic_damage, maximize_explosive_damage, maximize_ehp, maximize_speed"
@@ -101,24 +107,39 @@ def get_modules_for_goal(
     candidates = _drop_wildly_oversized(candidates, ev)
     candidates = _drop_untrainable(candidates, ev)
 
+    # Group candidates and score cheap-first within each group. If the cheapest
+    # of a group doesn't fit, its larger siblings won't either (usually) — skip
+    # the rest of THAT group. This handles bombers cleanly: Torpedo Launcher
+    # group's cheapest gets the role-bonus PG reduction and fits, unlocking
+    # the rest of the group. Across-group sort is less important than within-
+    # group; we walk in arbitrary group order.
+    from itertools import groupby
+
+    candidates.sort(key=lambda c: (c.group.name, _raw_resource_cost(c)))
     scored: list[dict[str, Any]] = []
-    for item in candidates:
-        ammo_name = _pick_ammo_name(item, damage_type)
-        # For damage goals, a weapon that can't deal the target damage type
-        # at all (e.g. laser asked for kinetic) returns ammo=None and would
-        # always score 0. Skip the engine call entirely.
-        if damage_type is not None and item.group.name in _WEAPON_GROUPS and ammo_name is None:
-            continue
-        try:
-            metrics = ev.score_module(item.typeName, ammo_name)
-        except ValueError:
-            continue  # invalid charge etc. — skip silently
-        if not metrics.fits:
-            continue  # over CPU or PG on this ship+skills
-        value = _goal_metric(metrics, goal, damage_type)
-        if value <= 0:
-            continue  # no contribution — drop
-        scored.append(_format_candidate(item, ammo_name, metrics, value, goal))
+    for _group_name, group_iter in groupby(candidates, key=lambda c: c.group.name):
+        group_misses = 0
+        for item in group_iter:
+            ammo_name = _pick_ammo_name(item, damage_type)
+            # For damage goals, a weapon that can't deal the target damage type
+            # at all (e.g. laser asked for kinetic) returns ammo=None and would
+            # always score 0. Skip the engine call entirely.
+            if damage_type is not None and item.group.name in _WEAPON_GROUPS and ammo_name is None:
+                continue
+            try:
+                metrics = ev.score_module(item.typeName, ammo_name)
+            except ValueError:
+                continue  # invalid charge etc. — skip silently
+            if not metrics.fits:
+                group_misses += 1
+                if group_misses >= _PER_GROUP_MISS_ABORT:
+                    break  # rest of THIS group almost certainly also won't fit
+                continue
+            group_misses = 0
+            value = _goal_metric(metrics, goal, damage_type)
+            if value <= 0:
+                continue  # no contribution — drop
+            scored.append(_format_candidate(item, ammo_name, metrics, value, goal))
 
     scored.sort(key=lambda c: c["effective_value"], reverse=True)
     return {
@@ -168,6 +189,15 @@ def get_item_by_name_by_id(type_id: int) -> Any | None:
     import eos.db
 
     return eos.db.getItem(type_id)
+
+
+def _raw_resource_cost(item: Any) -> float:
+    """Sort key: raw CPU + raw PG. Cheaper modules score first so we can
+    early-abort once the heavier tail is consistently failing the fit check.
+    """
+    cpu = item.attributes.get("cpu")
+    pg = item.attributes.get("power")
+    return (float(cpu.value) if cpu else 0.0) + (float(pg.value) if pg else 0.0)
 
 
 def _drop_wrong_hardpoint(candidates: list[Any], ev: FitEvaluator) -> list[Any]:
