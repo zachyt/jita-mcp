@@ -102,6 +102,33 @@ def test_unknown_ammo() -> None:
 
 
 @pytest.mark.sde
+def test_implant_boosts_pg() -> None:
+    """A +1% PG implant should raise the ship's bonused PG total."""
+    base = calculate_fit(ship="Condor", modules=[])
+    boosted = calculate_fit(
+        ship="Condor",
+        modules=[],
+        implants=["Inherent Implants 'Squire' Power Grid Management EG-601"],
+    )
+    assert boosted["fitting_total"]["powergrid"] > base["fitting_total"]["powergrid"]
+
+
+@pytest.mark.sde
+def test_unknown_implant() -> None:
+    res = calculate_fit(ship="Condor", modules=[], implants=["Not A Real Implant"])
+    assert res["status"] == "error"
+    assert "unknown implant" in res["reason"]
+
+
+@pytest.mark.sde
+def test_non_implant_passed_as_implant() -> None:
+    """Passing e.g. a module name as an implant should error clearly."""
+    res = calculate_fit(ship="Condor", modules=[], implants=["Rocket Launcher II"])
+    assert res["status"] == "error"
+    assert "not an implant" in res["reason"]
+
+
+@pytest.mark.sde
 def test_empty_fit_returns_bare_ship() -> None:
     """Edge case: no modules. Ship hull stats still come back; no errors."""
     res = calculate_fit(ship="Condor", modules=[])

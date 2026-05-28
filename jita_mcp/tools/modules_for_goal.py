@@ -49,6 +49,7 @@ def get_modules_for_goal(
     goal: str,
     slot: str,
     skills: dict[str, int] | None = None,
+    implants: list[str] | None = None,
     exclude: list[int] | None = None,
     preserve: list[int] | None = None,
     min_meta_level: int = 0,
@@ -69,6 +70,12 @@ def get_modules_for_goal(
     Defaults to All-V skills if `skills` is None. Pass `{}` for All-0; pass a
     dict like `{"Caldari Frigate": 4}` for a specific level (other skills
     still default to V).
+
+    `implants` is an optional list of implant names (e.g.
+    ["Inherent Implants 'Squire' Power Grid Management EG-601",
+     "Eifyr and Co. 'Rogue' Surgical Strike SS-905"]). Implants boost ship
+    CPU/PG, damage, speed, etc. and are factored into both the fit check
+    and the effective stats. Defaults to no implants.
 
     `raw=True` disables the "ship-size sanity" filter that, for battleship-tier
     hulls, drops obviously-wrong-size turrets (Small Pulse Laser on a
@@ -98,7 +105,7 @@ def get_modules_for_goal(
     skills_effective = _resolve_skills(skills)
 
     try:
-        ev = FitEvaluator(ship, skills=skills_effective)
+        ev = FitEvaluator(ship, skills=skills_effective, implants=implants)
     except ValueError as e:
         return {"status": "error", "reason": str(e)}
 

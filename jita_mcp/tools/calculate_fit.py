@@ -27,6 +27,7 @@ def calculate_fit(
     ship: str,
     modules: list[str],
     skills: dict[str, int] | None = None,
+    implants: list[str] | None = None,
 ) -> dict[str, Any]:
     """Validate a complete ship fit. Returns all stats plus a list of any
     problems with it. Call this every time you propose or modify a fit; do
@@ -39,6 +40,11 @@ def calculate_fit(
 
     `skills` defaults to All-V (the "what's possible" baseline). Pass a dict
     `{"Caldari Frigate": 4, ...}` to override specific skills.
+
+    `implants` is an optional list of implant names (e.g.
+    ["Inherent Implants 'Squire' Power Grid Management EG-601"]). Implants
+    boost ship CPU/PG, damage, speed, etc. and are factored into validity
+    and stats. Defaults to no implants.
 
     Returns:
       status: "ok" / error code
@@ -71,7 +77,7 @@ def calculate_fit(
         parsed.append((name, ammo_name, mod_item, ammo_item))
 
     try:
-        ev = FitEvaluator(ship, skills=skills or {})
+        ev = FitEvaluator(ship, skills=skills or {}, implants=implants)
     except ValueError as e:
         return {"status": "error", "reason": str(e)}
 

@@ -25,6 +25,7 @@ import eos.db  # noqa: E402
 from eos.const import FittingModuleState  # noqa: E402
 from eos.saveddata.character import Character  # noqa: E402
 from eos.saveddata.fit import Fit  # noqa: E402
+from eos.saveddata.implant import Implant  # noqa: E402
 from eos.saveddata.module import Module  # noqa: E402
 from eos.saveddata.ship import Ship as EosShip  # noqa: E402
 
@@ -86,12 +87,14 @@ class FitEvaluator:
         self,
         ship_name: str,
         skills: dict[str, int] | None = None,
+        implants: list[str] | None = None,
     ) -> None:
         ship_item = get_item_by_name(ship_name)
         if ship_item is None or ship_item.category.name != "Ship":
             raise ValueError(f"unknown ship: {ship_name!r}")
         self._ship_item = ship_item
         self._character = self._build_character(skills or {})
+        self._implants = self._build_implants(implants or [])
         self._baseline: list[BaselineModule] = []
         # Reused across score_module calls. Built on first call; rebuilt
         # whenever the baseline changes.
@@ -173,6 +176,17 @@ class FitEvaluator:
             char.getSkill(skill_item.ID).setLevel(level, ignoreRestrict=True)
         return char
 
+    def _build_implants(self, implants: list[str]) -> list[Any]:
+        out: list[Any] = []
+        for name in implants:
+            item = get_item_by_name(name)
+            if item is None:
+                raise ValueError(f"unknown implant: {name!r}")
+            if item.category.name != "Implant":
+                raise ValueError(f"{name!r} is not an implant (category={item.category.name!r})")
+            out.append(Implant(item))
+        return out
+
     def _fresh_fit(self) -> Any:
         fit = Fit(ship=EosShip(self._ship_item))
         fit.character = self._character
@@ -180,6 +194,12 @@ class FitEvaluator:
         # backref ownership (mod.owner -> fit). Without this, getDps()
         # crashes accessing self.owner.factorReload.
         eos.db.saveddata_session.add(fit)
+        # Attach implants — they live on the fit (not the character) in pyfa's
+        # model. Each Implant instance is single-use; rebuild per fit.
+        for name in (i.item.typeName for i in self._implants):
+            item = get_item_by_name(name)
+            if item is not None:
+                fit.implants.append(Implant(item))
         return fit
 
     def _add_baseline(self, fit: Any) -> None:
