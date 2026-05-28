@@ -6,6 +6,7 @@ from typing import Any
 
 from jita_mcp.db.eve import get_item_by_name
 from jita_mcp.engine.evaluator import BaselineModule, FitEvaluator
+from jita_mcp.market import get_jita_sell_min
 
 _SLOT_NAME_BY_EFFECT = {
     "hiPower": "high",
@@ -23,7 +24,7 @@ _SHIP_SLOT_ATTRS = {
 }
 
 
-def calculate_fit(
+async def calculate_fit(
     ship: str,
     modules: list[str],
     skills: dict[str, int] | None = None,
@@ -102,6 +103,25 @@ def calculate_fit(
     slots_total = _ship_slot_totals(ship_item)
     errors = _collect_errors(metrics, slots_used, slots_total, parsed, ev)
 
+    # Live Jita 4-4 sell-min for every typeID in the fit (modules + ammo +
+    # drones + implants). Cached + ETag-aware so repeat calls are free.
+    cost_items: list[tuple[str, int]] = []
+    for name, ammo_name, mod_item, ammo_item in parsed:
+        cost_items.append((name, mod_item.ID))
+        if ammo_item is not None and ammo_name is not None:
+            cost_items.append((ammo_name, ammo_item.ID))
+    for drone_name in drones or []:
+        item = get_item_by_name(drone_name)
+        if item is not None:
+            cost_items.append((drone_name, item.ID))
+    for implant_name in implants or []:
+        item = get_item_by_name(implant_name)
+        if item is not None:
+            cost_items.append((implant_name, item.ID))
+
+    prices = await get_jita_sell_min([tid for _, tid in cost_items])
+    total_cost = sum((prices.get(tid) or 0) for _, tid in cost_items)
+
     return {
         "status": "ok",
         "valid": not errors,
@@ -156,6 +176,13 @@ def calculate_fit(
         "sensor": {
             "scan_resolution": round(metrics.scan_resolution, 1),
             "signature_radius": round(metrics.signature_radius, 1),
+        },
+        "cost": {
+            "total_jita_sell": round(total_cost) if total_cost else 0,
+            "per_item": [
+                {"name": name, "typeID": tid, "jita_sell": prices.get(tid)}
+                for name, tid in cost_items
+            ],
         },
         "errors": errors,
     }

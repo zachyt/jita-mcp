@@ -7,30 +7,30 @@ from jita_mcp.tools.modules_for_goal import get_modules_for_goal
 
 
 @pytest.mark.sde
-def test_unknown_goal_returns_structured_response() -> None:
-    res = get_modules_for_goal(ship="Condor", goal="nonsense", slot="high")
+async def test_unknown_goal_returns_structured_response() -> None:
+    res = await get_modules_for_goal(ship="Condor", goal="nonsense", slot="high")
     assert res["status"] == "unknown_goal"
     assert res["goal"] == "nonsense"
 
 
 @pytest.mark.sde
-def test_unsupported_slot_returns_structured_response() -> None:
+async def test_unsupported_slot_returns_structured_response() -> None:
     # We don't register maximize_ehp on high slot — armor reps on high are absent
-    res = get_modules_for_goal(ship="Condor", goal="maximize_ehp", slot="high")
+    res = await get_modules_for_goal(ship="Condor", goal="maximize_ehp", slot="high")
     assert res["status"] == "unsupported"
     assert res["slot"] == "high"
 
 
 @pytest.mark.sde
-def test_unknown_ship_returns_error() -> None:
-    res = get_modules_for_goal(ship="Not A Ship", goal="maximize_dps", slot="high")
+async def test_unknown_ship_returns_error() -> None:
+    res = await get_modules_for_goal(ship="Not A Ship", goal="maximize_dps", slot="high")
     assert res["status"] == "error"
 
 
 @pytest.mark.sde
-def test_dps_high_slot_returns_frigate_appropriate_weapons() -> None:
+async def test_dps_high_slot_returns_frigate_appropriate_weapons() -> None:
     """The CPU/PG fit filter should drop XL torps from a Condor's options."""
-    res = get_modules_for_goal(
+    res = await get_modules_for_goal(
         ship="Condor",
         goal="maximize_kinetic_damage",
         slot="high",
@@ -48,9 +48,9 @@ def test_dps_high_slot_returns_frigate_appropriate_weapons() -> None:
 
 
 @pytest.mark.sde
-def test_battleship_excludes_small_turrets_by_default() -> None:
+async def test_battleship_excludes_small_turrets_by_default() -> None:
     """Megathron should never surface Small/Medium turrets in default mode."""
-    res = get_modules_for_goal(
+    res = await get_modules_for_goal(
         ship="Megathron",
         goal="maximize_dps",
         slot="high",
@@ -63,16 +63,16 @@ def test_battleship_excludes_small_turrets_by_default() -> None:
 
 
 @pytest.mark.sde
-def test_raw_true_unfilters_size_check() -> None:
+async def test_raw_true_unfilters_size_check() -> None:
     """raw=True should include small/medium turrets even on a battleship."""
-    default_res = get_modules_for_goal(
+    default_res = await get_modules_for_goal(
         ship="Megathron",
         goal="maximize_dps",
         slot="high",
         min_meta_level=5,
         top_n=5,
     )
-    raw_res = get_modules_for_goal(
+    raw_res = await get_modules_for_goal(
         ship="Megathron",
         goal="maximize_dps",
         slot="high",
@@ -85,10 +85,10 @@ def test_raw_true_unfilters_size_check() -> None:
 
 
 @pytest.mark.sde
-def test_damage_mod_baseline_lift() -> None:
+async def test_damage_mod_baseline_lift() -> None:
     """maximize_dps + slot=low + preserve=[launcher]*4 must surface BCS variants."""
     rocket_launcher_ii_type_id = 10631
-    res = get_modules_for_goal(
+    res = await get_modules_for_goal(
         ship="Condor",
         goal="maximize_kinetic_damage",
         slot="low",
@@ -106,8 +106,8 @@ def test_damage_mod_baseline_lift() -> None:
 
 
 @pytest.mark.sde
-def test_speed_med_slot_picks_prop_mod() -> None:
-    res = get_modules_for_goal(
+async def test_speed_med_slot_picks_prop_mod() -> None:
+    res = await get_modules_for_goal(
         ship="Condor",
         goal="maximize_speed",
         slot="med",

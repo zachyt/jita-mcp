@@ -395,6 +395,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "logbook" },
     { name = "mcp" },
     { name = "pydantic" },
@@ -426,6 +427,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "logbook", specifier = ">=1.9.2" },
     { name = "mcp", specifier = ">=1.2.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },

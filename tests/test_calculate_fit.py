@@ -7,9 +7,9 @@ from jita_mcp.tools.calculate_fit import calculate_fit
 
 
 @pytest.mark.sde
-def test_valid_condor_fit() -> None:
+async def test_valid_condor_fit() -> None:
     """A modest Condor fit that comfortably fits at All-V should validate clean."""
-    res = calculate_fit(
+    res = await calculate_fit(
         ship="Condor",
         modules=[
             "Rocket Launcher II, Caldari Navy Scourge Rocket",
@@ -40,8 +40,8 @@ def test_valid_condor_fit() -> None:
 
 
 @pytest.mark.sde
-def test_overfit_cpu_and_pg_surfaces_errors() -> None:
-    res = calculate_fit(
+async def test_overfit_cpu_and_pg_surfaces_errors() -> None:
+    res = await calculate_fit(
         ship="Condor",
         modules=["Rocket Launcher II"] * 4
         + ["Medium Shield Extender II"] * 4
@@ -57,9 +57,9 @@ def test_overfit_cpu_and_pg_surfaces_errors() -> None:
 
 
 @pytest.mark.sde
-def test_calibration_field_reported() -> None:
+async def test_calibration_field_reported() -> None:
     """fitting_used/fitting_total now include calibration; verify it surfaces."""
-    res = calculate_fit(ship="Condor", modules=["Small Core Defense Field Extender II"])
+    res = await calculate_fit(ship="Condor", modules=["Small Core Defense Field Extender II"])
     assert res["status"] == "ok"
     assert "calibration" in res["fitting_used"]
     assert "calibration" in res["fitting_total"]
@@ -68,9 +68,9 @@ def test_calibration_field_reported() -> None:
 
 
 @pytest.mark.sde
-def test_slot_overflow_high() -> None:
+async def test_slot_overflow_high() -> None:
     """Fitting 5 high-slot modules on a Condor (4 high slots) flags overflow."""
-    res = calculate_fit(
+    res = await calculate_fit(
         ship="Condor",
         modules=[
             "Rocket Launcher II",
@@ -85,21 +85,21 @@ def test_slot_overflow_high() -> None:
 
 
 @pytest.mark.sde
-def test_unknown_ship() -> None:
-    res = calculate_fit(ship="Not A Ship", modules=[])
+async def test_unknown_ship() -> None:
+    res = await calculate_fit(ship="Not A Ship", modules=[])
     assert res["status"] == "no_match"
 
 
 @pytest.mark.sde
-def test_unknown_module() -> None:
-    res = calculate_fit(ship="Condor", modules=["Not A Real Module"])
+async def test_unknown_module() -> None:
+    res = await calculate_fit(ship="Condor", modules=["Not A Real Module"])
     assert res["status"] == "unknown_module"
     assert res["module"] == "Not A Real Module"
 
 
 @pytest.mark.sde
-def test_unknown_ammo() -> None:
-    res = calculate_fit(
+async def test_unknown_ammo() -> None:
+    res = await calculate_fit(
         ship="Condor",
         modules=["Rocket Launcher II, Not A Real Ammo"],
     )
@@ -107,10 +107,10 @@ def test_unknown_ammo() -> None:
 
 
 @pytest.mark.sde
-def test_implant_boosts_pg() -> None:
+async def test_implant_boosts_pg() -> None:
     """A +1% PG implant should raise the ship's bonused PG total."""
-    base = calculate_fit(ship="Condor", modules=[])
-    boosted = calculate_fit(
+    base = await calculate_fit(ship="Condor", modules=[])
+    boosted = await calculate_fit(
         ship="Condor",
         modules=[],
         implants=["Inherent Implants 'Squire' Power Grid Management EG-601"],
@@ -119,8 +119,8 @@ def test_implant_boosts_pg() -> None:
 
 
 @pytest.mark.sde
-def test_drones_contribute_dps_and_fit_clean() -> None:
-    res = calculate_fit(ship="Vexor", modules=[], drones=["Hammerhead II"] * 5)
+async def test_drones_contribute_dps_and_fit_clean() -> None:
+    res = await calculate_fit(ship="Vexor", modules=[], drones=["Hammerhead II"] * 5)
     assert res["valid"]
     assert res["dps"]["total"] > 100  # 5 Hammerhead IIs at All-V > 100 DPS
     assert res["fitting_used"]["drone_bay"] == 50.0
@@ -128,40 +128,40 @@ def test_drones_contribute_dps_and_fit_clean() -> None:
 
 
 @pytest.mark.sde
-def test_drone_bay_overflow() -> None:
+async def test_drone_bay_overflow() -> None:
     """Vexor drone bay is 125 m³; 20 Hammerheads (200 m³) exceeds it."""
-    res = calculate_fit(ship="Vexor", modules=[], drones=["Hammerhead II"] * 20)
+    res = await calculate_fit(ship="Vexor", modules=[], drones=["Hammerhead II"] * 20)
     error_types = {e["type"] for e in res["errors"]}
     assert "drone_bay_overflow" in error_types
     assert "drone_bandwidth_overflow" in error_types
 
 
 @pytest.mark.sde
-def test_unknown_drone() -> None:
-    res = calculate_fit(ship="Vexor", modules=[], drones=["Hammerhead III"])
+async def test_unknown_drone() -> None:
+    res = await calculate_fit(ship="Vexor", modules=[], drones=["Hammerhead III"])
     assert res["status"] == "error"
     assert "unknown drone" in res["reason"]
 
 
 @pytest.mark.sde
-def test_unknown_implant() -> None:
-    res = calculate_fit(ship="Condor", modules=[], implants=["Not A Real Implant"])
+async def test_unknown_implant() -> None:
+    res = await calculate_fit(ship="Condor", modules=[], implants=["Not A Real Implant"])
     assert res["status"] == "error"
     assert "unknown implant" in res["reason"]
 
 
 @pytest.mark.sde
-def test_non_implant_passed_as_implant() -> None:
+async def test_non_implant_passed_as_implant() -> None:
     """Passing e.g. a module name as an implant should error clearly."""
-    res = calculate_fit(ship="Condor", modules=[], implants=["Rocket Launcher II"])
+    res = await calculate_fit(ship="Condor", modules=[], implants=["Rocket Launcher II"])
     assert res["status"] == "error"
     assert "not an implant" in res["reason"]
 
 
 @pytest.mark.sde
-def test_empty_fit_returns_bare_ship() -> None:
+async def test_empty_fit_returns_bare_ship() -> None:
     """Edge case: no modules. Ship hull stats still come back; no errors."""
-    res = calculate_fit(ship="Condor", modules=[])
+    res = await calculate_fit(ship="Condor", modules=[])
     assert res["status"] == "ok"
     assert res["valid"]
     assert res["slots_used"] == {"high": 0, "med": 0, "low": 0, "rig": 0, "subsystem": 0}

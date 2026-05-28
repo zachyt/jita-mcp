@@ -29,6 +29,7 @@ from jita_mcp.engine.categories import (
     groups_for,
 )
 from jita_mcp.engine.evaluator import BaselineModule, FitEvaluator, FitMetrics
+from jita_mcp.market import get_jita_sell_min
 
 DEFAULT_TOP_N = 15
 
@@ -44,7 +45,7 @@ _GOALS_DOC = (
 )
 
 
-def get_modules_for_goal(
+async def get_modules_for_goal(
     ship: str,
     goal: str,
     slot: str,
@@ -55,6 +56,7 @@ def get_modules_for_goal(
     min_meta_level: int = 0,
     max_meta_level: int = 14,
     top_n: int = DEFAULT_TOP_N,
+    max_module_cost: int | None = None,
     raw: bool = False,
 ) -> dict[str, Any]:
     """Returns ranked module candidates for a fitting objective on a specific ship.
@@ -83,6 +85,11 @@ def get_modules_for_goal(
     an atypical / off-meta fit (e.g. "I want anti-frigate small guns on my
     battleship" or "show me everything"). The default false is right 99% of
     the time and is what makes the tool fast on big ships.
+
+    `max_module_cost` (ISK) drops candidates whose Jita 4-4 sell-min exceeds
+    the budget. Cost lookup hits ESI (cached, 5-min TTL). Default None = no
+    cost filter, but each returned candidate still includes its jita_sell
+    price for the LLM to use.
 
     Supported goals: maximize_dps, maximize_em_damage, maximize_thermal_damage,
     maximize_kinetic_damage, maximize_explosive_damage, maximize_ehp, maximize_speed.
@@ -159,6 +166,21 @@ def get_modules_for_goal(
             scored.append(_format_candidate(item, ammo_name, metrics, value, goal))
 
     scored.sort(key=lambda c: c["effective_value"], reverse=True)
+
+    # Price only the leaders. Fetch a buffer (3x top_n) so max_module_cost has
+    # room to drop expensive candidates and still leave us a full top_n list.
+    leaders = scored[: top_n * 3] if max_module_cost else scored[:top_n]
+    prices = await get_jita_sell_min([c["typeID"] for c in leaders])
+    for c in leaders:
+        c["jita_sell"] = prices.get(c["typeID"])
+    if max_module_cost is not None:
+        # Strict: drop both over-budget AND no-price items. If the LLM gave us
+        # a budget, "no Jita orders" effectively means "can't be bought at the
+        # canonical hub at any quoted price" — surface only buyable picks.
+        leaders = [
+            c for c in leaders if c["jita_sell"] is not None and c["jita_sell"] <= max_module_cost
+        ]
+
     return {
         "status": "ok",
         "ship": ship,
@@ -166,7 +188,7 @@ def get_modules_for_goal(
         "slot": slot,
         "skills": "all_v" if skills is None else "custom",
         "candidate_count": len(scored),
-        "candidates": scored[:top_n],
+        "candidates": leaders[:top_n],
     }
 
 
