@@ -39,6 +39,7 @@ def export_eft(
     ship: str,
     modules: list[str],
     fit_name: str | None = None,
+    drones: list[str] | None = None,
 ) -> dict[str, Any]:
     """Format a complete fit as an EFT string and list all skills required to fly it.
 
@@ -52,6 +53,10 @@ def export_eft(
     Modules are listed in input order within each slot section. Pass duplicates
     for multiple of the same module (e.g. three rocket launchers = three
     "Rocket Launcher II" entries).
+
+    `drones` follows the same pattern — repeat names for multiples. They get
+    aggregated and emitted as a "Drones" section in EFT's `<TypeName> xN`
+    format.
     """
     ship_item = get_item_by_name(ship)
     if ship_item is None or ship_item.category.name != "Ship":
@@ -71,6 +76,17 @@ def export_eft(
             return {"status": "not_fittable", "module": name, "reason": "no slot effect on item"}
         sections[slot_idx].append(item.typeName)
 
+    resolved_drones: list[Any] = []
+    drone_counts: dict[str, int] = {}
+    for name in drones or []:
+        item = get_item_by_name(name)
+        if item is None:
+            return {"status": "unknown_drone", "drone": name}
+        if item.category.name != "Drone":
+            return {"status": "not_a_drone", "drone": name, "category": item.category.name}
+        resolved_drones.append(item)
+        drone_counts[item.typeName] = drone_counts.get(item.typeName, 0) + 1
+
     # EFT layout: header line, then sections separated by a single blank line.
     # NB: NO blank line between the header and the first non-empty section.
     label = fit_name or ship_item.typeName
@@ -83,9 +99,17 @@ def export_eft(
             parts.append("")  # blank line BETWEEN slot sections
         parts.extend(sections[idx])
         first_section = False
+    if drone_counts:
+        if not first_section:
+            parts.append("")
+        # Drones use EFT's "<TypeName> x<count>" syntax.
+        for drone_name, count in drone_counts.items():
+            parts.append(f"{drone_name} x{count}")
     eft = "\n".join(parts)
 
-    skills = _collect_required_skills([ship_item, *(item for _, item in resolved)])
+    skills = _collect_required_skills(
+        [ship_item, *(item for _, item in resolved), *resolved_drones]
+    )
     return {
         "status": "ok",
         "eft": eft,

@@ -114,6 +114,31 @@ def test_implant_boosts_pg() -> None:
 
 
 @pytest.mark.sde
+def test_drones_contribute_dps_and_fit_clean() -> None:
+    res = calculate_fit(ship="Vexor", modules=[], drones=["Hammerhead II"] * 5)
+    assert res["valid"]
+    assert res["dps"]["total"] > 100  # 5 Hammerhead IIs at All-V > 100 DPS
+    assert res["fitting_used"]["drone_bay"] == 50.0
+    assert res["fitting_used"]["drone_bandwidth"] == 50.0
+
+
+@pytest.mark.sde
+def test_drone_bay_overflow() -> None:
+    """Vexor drone bay is 125 m³; 20 Hammerheads (200 m³) exceeds it."""
+    res = calculate_fit(ship="Vexor", modules=[], drones=["Hammerhead II"] * 20)
+    error_types = {e["type"] for e in res["errors"]}
+    assert "drone_bay_overflow" in error_types
+    assert "drone_bandwidth_overflow" in error_types
+
+
+@pytest.mark.sde
+def test_unknown_drone() -> None:
+    res = calculate_fit(ship="Vexor", modules=[], drones=["Hammerhead III"])
+    assert res["status"] == "error"
+    assert "unknown drone" in res["reason"]
+
+
+@pytest.mark.sde
 def test_unknown_implant() -> None:
     res = calculate_fit(ship="Condor", modules=[], implants=["Not A Real Implant"])
     assert res["status"] == "error"

@@ -24,6 +24,7 @@ setup()
 import eos.db  # noqa: E402
 from eos.const import FittingModuleState  # noqa: E402
 from eos.saveddata.character import Character  # noqa: E402
+from eos.saveddata.drone import Drone  # noqa: E402
 from eos.saveddata.fit import Fit  # noqa: E402
 from eos.saveddata.implant import Implant  # noqa: E402
 from eos.saveddata.module import Module  # noqa: E402
@@ -54,6 +55,10 @@ class FitMetrics:
     cpu_total: float  # post-skill ship CPU output (bonused)
     pg_total: float
     calibration_total: float  # ship's upgradeCapacity (calibration pool)
+    drone_bay_used: float  # m³ consumed by drones in the bay
+    drone_bay_total: float  # ship's bonused drone bay capacity
+    drone_bandwidth_used: float  # Mbit/s consumed by ACTIVE drones
+    drone_bandwidth_total: float  # ship's bonused drone bandwidth
 
     @property
     def fits(self) -> bool:
@@ -61,6 +66,8 @@ class FitMetrics:
             self.cpu_used <= self.cpu_total
             and self.pg_used <= self.pg_total
             and self.calibration_used <= self.calibration_total
+            and self.drone_bay_used <= self.drone_bay_total
+            and self.drone_bandwidth_used <= self.drone_bandwidth_total
         )
 
 
@@ -88,6 +95,7 @@ class FitEvaluator:
         ship_name: str,
         skills: dict[str, int] | None = None,
         implants: list[str] | None = None,
+        drones: list[str] | None = None,
     ) -> None:
         ship_item = get_item_by_name(ship_name)
         if ship_item is None or ship_item.category.name != "Ship":
@@ -95,6 +103,9 @@ class FitEvaluator:
         self._ship_item = ship_item
         self._character = self._build_character(skills or {})
         self._implants = self._build_implants(implants or [])
+        # Aggregate drones by typeID -> count so we can build one Drone object
+        # per type with amount=N (pyfa's convention).
+        self._drone_counts = self._build_drone_counts(drones or [])
         self._baseline: list[BaselineModule] = []
         # Reused across score_module calls. Built on first call; rebuilt
         # whenever the baseline changes.
@@ -187,6 +198,20 @@ class FitEvaluator:
             out.append(Implant(item))
         return out
 
+    def _build_drone_counts(self, drones: list[str]) -> dict[int, tuple[Any, int]]:
+        """Aggregate input list into {typeID: (item, count)} so each drone
+        type becomes one Drone object with amount=count when attached."""
+        counts: dict[int, tuple[Any, int]] = {}
+        for name in drones:
+            item = get_item_by_name(name)
+            if item is None:
+                raise ValueError(f"unknown drone: {name!r}")
+            if item.category.name != "Drone":
+                raise ValueError(f"{name!r} is not a drone (category={item.category.name!r})")
+            tid = item.ID
+            counts[tid] = (item, counts.get(tid, (item, 0))[1] + 1)
+        return counts
+
     def _fresh_fit(self) -> Any:
         fit = Fit(ship=EosShip(self._ship_item))
         fit.character = self._character
@@ -200,6 +225,16 @@ class FitEvaluator:
             item = get_item_by_name(name)
             if item is not None:
                 fit.implants.append(Implant(item))
+        # Attach drones. One Drone instance per type, amount=count, all active.
+        # (Active count caps at the character's max-launched in pyfa's internal
+        # bandwidth math, so over-launching here just yields a bandwidth_used
+        # > total which gets surfaced as drone_bandwidth_overflow.)
+        for item, count in self._drone_counts.values():
+            drone = Drone(item)
+            drone.amount = count
+            drone.amountActive = count
+            fit.drones.append(drone)
+            drone.owner = fit  # pyright: ignore[reportAttributeAccessIssue]
         return fit
 
     def _add_baseline(self, fit: Any) -> None:
@@ -266,4 +301,8 @@ class FitEvaluator:
             cpu_total=float(fit.ship.getModifiedItemAttr("cpuOutput") or 0),
             pg_total=float(fit.ship.getModifiedItemAttr("powerOutput") or 0),
             calibration_total=float(fit.ship.getModifiedItemAttr("upgradeCapacity") or 0),
+            drone_bay_used=float(getattr(fit, "droneBayUsed", 0)),
+            drone_bay_total=float(fit.ship.getModifiedItemAttr("droneCapacity") or 0),
+            drone_bandwidth_used=float(getattr(fit, "droneBandwidthUsed", 0)),
+            drone_bandwidth_total=float(fit.ship.getModifiedItemAttr("droneBandwidth") or 0),
         )

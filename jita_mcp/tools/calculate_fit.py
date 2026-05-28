@@ -28,6 +28,7 @@ def calculate_fit(
     modules: list[str],
     skills: dict[str, int] | None = None,
     implants: list[str] | None = None,
+    drones: list[str] | None = None,
 ) -> dict[str, Any]:
     """Validate a complete ship fit. Returns all stats plus a list of any
     problems with it. Call this every time you propose or modify a fit; do
@@ -45,6 +46,12 @@ def calculate_fit(
     ["Inherent Implants 'Squire' Power Grid Management EG-601"]). Implants
     boost ship CPU/PG, damage, speed, etc. and are factored into validity
     and stats. Defaults to no implants.
+
+    `drones` is an optional list of drone names (repeat for multiples, e.g.
+    ["Hammerhead II", "Hammerhead II", "Hammerhead II", "Hammerhead II",
+     "Hammerhead II"] for 5 Hammerheads). Drone DPS folds into the dps total,
+    and validation flags drone_bay_overflow / drone_bandwidth_overflow if
+    over budget.
 
     Returns:
       status: "ok" / error code
@@ -77,7 +84,7 @@ def calculate_fit(
         parsed.append((name, ammo_name, mod_item, ammo_item))
 
     try:
-        ev = FitEvaluator(ship, skills=skills or {}, implants=implants)
+        ev = FitEvaluator(ship, skills=skills or {}, implants=implants, drones=drones)
     except ValueError as e:
         return {"status": "error", "reason": str(e)}
 
@@ -105,11 +112,15 @@ def calculate_fit(
             "cpu": round(metrics.cpu_used, 2),
             "powergrid": round(metrics.pg_used, 2),
             "calibration": round(metrics.calibration_used, 2),
+            "drone_bay": round(metrics.drone_bay_used, 2),
+            "drone_bandwidth": round(metrics.drone_bandwidth_used, 2),
         },
         "fitting_total": {
             "cpu": round(metrics.cpu_total, 2),
             "powergrid": round(metrics.pg_total, 2),
             "calibration": round(metrics.calibration_total, 2),
+            "drone_bay": round(metrics.drone_bay_total, 2),
+            "drone_bandwidth": round(metrics.drone_bandwidth_total, 2),
         },
         "ehp": {k: round(v) for k, v in metrics.ehp.items()},
         "ehp_total": round(metrics.ehp_total),
@@ -202,6 +213,30 @@ def _collect_errors(
                 "message": f"Calibration over budget by {excess} "
                 f"(used {round(metrics.calibration_used, 2)}, "
                 f"have {round(metrics.calibration_total, 2)})",
+            }
+        )
+
+    if metrics.drone_bay_used > metrics.drone_bay_total:
+        excess = round(metrics.drone_bay_used - metrics.drone_bay_total, 2)
+        errors.append(
+            {
+                "type": "drone_bay_overflow",
+                "excess": excess,
+                "message": f"Drone bay over by {excess} m³ "
+                f"(used {round(metrics.drone_bay_used, 2)}, "
+                f"have {round(metrics.drone_bay_total, 2)})",
+            }
+        )
+
+    if metrics.drone_bandwidth_used > metrics.drone_bandwidth_total:
+        excess = round(metrics.drone_bandwidth_used - metrics.drone_bandwidth_total, 2)
+        errors.append(
+            {
+                "type": "drone_bandwidth_overflow",
+                "excess": excess,
+                "message": f"Drone bandwidth over by {excess} Mbit/s "
+                f"(used {round(metrics.drone_bandwidth_used, 2)}, "
+                f"have {round(metrics.drone_bandwidth_total, 2)})",
             }
         )
 

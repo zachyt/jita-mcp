@@ -64,6 +64,23 @@ def test_eft_unknown_module() -> None:
 
 
 @pytest.mark.sde
+def test_eft_drones_section_aggregates_with_count() -> None:
+    res = export_eft(
+        ship="Vexor",
+        modules=["10MN Afterburner II"],
+        drones=["Hammerhead II"] * 3 + ["Warrior II"] * 2,
+    )
+    assert res["status"] == "ok"
+    eft = res["eft"]
+    assert "Hammerhead II x3" in eft
+    assert "Warrior II x2" in eft
+    # Drone prereq skills should surface (Medium Drone Operation for Hammerheads etc.)
+    skill_names = {s["skill"] for s in res["required_skills"]}
+    assert "Drones" in skill_names
+    assert "Medium Drone Operation" in skill_names
+
+
+@pytest.mark.sde
 def test_eft_section_ordering_high_med_low_rig() -> None:
     """Modules are emitted in slot order regardless of input order."""
     res = export_eft(
