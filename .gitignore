@@ -43,8 +43,9 @@ Thumbs.db
 .env.local
 .env.*.local
 
-# Data — never commit the full SDE (~700MB)
+# Data — never commit the full SDE (~700MB) or pyfa-built eve.db (~94MB)
 data/
+vendor/pyfa/eve.db
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal

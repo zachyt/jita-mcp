@@ -25,6 +25,8 @@ dependencies = [
     "aiohttp>=3.10.0",
     "pydantic>=2.9.0",
     "pydantic-settings>=2.6.0",
+    "sqlalchemy>=1.4,<2",
+    "logbook>=1.9.2",
 ]
 
 [project.optional-dependencies]
