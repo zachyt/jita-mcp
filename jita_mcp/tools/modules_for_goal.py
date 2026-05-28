@@ -54,6 +54,7 @@ def get_modules_for_goal(
     min_meta_level: int = 0,
     max_meta_level: int = 14,
     top_n: int = DEFAULT_TOP_N,
+    raw: bool = False,
 ) -> dict[str, Any]:
     """Returns ranked module candidates for a fitting objective on a specific ship.
 
@@ -68,6 +69,13 @@ def get_modules_for_goal(
     Defaults to All-V skills if `skills` is None. Pass `{}` for All-0; pass a
     dict like `{"Caldari Frigate": 4}` for a specific level (other skills
     still default to V).
+
+    `raw=True` disables the "ship-size sanity" filter that, for battleship-tier
+    hulls, drops obviously-wrong-size turrets (Small Pulse Laser on a
+    Megathron, etc.). Only set raw=True when the user is explicitly asking for
+    an atypical / off-meta fit (e.g. "I want anti-frigate small guns on my
+    battleship" or "show me everything"). The default false is right 99% of
+    the time and is what makes the tool fast on big ships.
 
     Supported goals: maximize_dps, maximize_em_damage, maximize_thermal_damage,
     maximize_kinetic_damage, maximize_explosive_damage, maximize_ehp, maximize_speed.
@@ -104,6 +112,8 @@ def get_modules_for_goal(
         max_meta=max_meta_level,
     )
     candidates = _drop_wrong_hardpoint(candidates, ev)
+    if not raw:
+        candidates = _drop_too_small_turrets(candidates, ev)
     candidates = _drop_wildly_oversized(candidates, ev)
     candidates = _drop_untrainable(candidates, ev)
 
@@ -198,6 +208,45 @@ def _raw_resource_cost(item: Any) -> float:
     cpu = item.attributes.get("cpu")
     pg = item.attributes.get("power")
     return (float(cpu.value) if cpu else 0.0) + (float(pg.value) if pg else 0.0)
+
+
+# Battleship-tier ships should never fit small or medium turrets (chargeSize
+# 1 or 2). They CAN, technically — but no real fit ever does. Dropping them
+# keeps the scoring tractable on battleships. Frigates / cruisers / BCs are
+# left alone because edge cases (pirate frigates, T3 cruisers, etc) abound.
+# Missile launchers don't have chargeSize, so they pass through untouched —
+# important for the bomber+torpedo case.
+_MIN_TURRET_CHARGE_SIZE_BY_SHIP_GROUP = {
+    "Battleship": 3,
+    "Marauder": 3,
+    "Black Ops": 3,
+    "Carrier": 4,
+    "Dreadnought": 4,
+    "Force Auxiliary": 4,
+    "Supercarrier": 4,
+    "Titan": 4,
+}
+
+
+def _drop_too_small_turrets(candidates: list[Any], ev: FitEvaluator) -> list[Any]:
+    """Drop turret modules whose chargeSize is smaller than the ship's class
+    should ever realistically fit (e.g. Small Pulse Laser on a Megathron).
+
+    Only applies to ships in _MIN_TURRET_CHARGE_SIZE_BY_SHIP_GROUP; for other
+    ships there are too many edge cases (Daredevil fitting medium guns, T2
+    pirate ships, etc) to risk a false drop.
+    """
+    ship_group = ev._ship_item.group.name
+    min_size = _MIN_TURRET_CHARGE_SIZE_BY_SHIP_GROUP.get(ship_group)
+    if min_size is None:
+        return candidates
+    keep: list[Any] = []
+    for item in candidates:
+        cs_attr = item.attributes.get("chargeSize")
+        if cs_attr is not None and float(cs_attr.value) < min_size:
+            continue
+        keep.append(item)
+    return keep
 
 
 def _drop_wrong_hardpoint(candidates: list[Any], ev: FitEvaluator) -> list[Any]:

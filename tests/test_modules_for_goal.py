@@ -48,6 +48,43 @@ def test_dps_high_slot_returns_frigate_appropriate_weapons() -> None:
 
 
 @pytest.mark.sde
+def test_battleship_excludes_small_turrets_by_default() -> None:
+    """Megathron should never surface Small/Medium turrets in default mode."""
+    res = get_modules_for_goal(
+        ship="Megathron",
+        goal="maximize_dps",
+        slot="high",
+        min_meta_level=5,
+        top_n=10,
+    )
+    names = [c["name"] for c in res["candidates"]]
+    assert not any("Small" in n for n in names), names
+    assert not any("Medium" in n for n in names), names
+
+
+@pytest.mark.sde
+def test_raw_true_unfilters_size_check() -> None:
+    """raw=True should include small/medium turrets even on a battleship."""
+    default_res = get_modules_for_goal(
+        ship="Megathron",
+        goal="maximize_dps",
+        slot="high",
+        min_meta_level=5,
+        top_n=5,
+    )
+    raw_res = get_modules_for_goal(
+        ship="Megathron",
+        goal="maximize_dps",
+        slot="high",
+        min_meta_level=5,
+        top_n=5,
+        raw=True,
+    )
+    # raw should see strictly more candidates (small + medium turrets unlocked).
+    assert raw_res["candidate_count"] > default_res["candidate_count"]
+
+
+@pytest.mark.sde
 def test_damage_mod_baseline_lift() -> None:
     """maximize_dps + slot=low + preserve=[launcher]*4 must surface BCS variants."""
     rocket_launcher_ii_type_id = 10631
