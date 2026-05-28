@@ -16,9 +16,9 @@ from jita_mcp.tools import (
 mcp = FastMCP(
     name="jita-mcp",
     instructions=(
-        "EVE Online fitting tools. Use these for ship stats, module stats, fit "
-        "validation, and prices. Do not estimate from training knowledge — EVE data "
-        "changes with patches and only the values returned here are authoritative."
+        "EVE Online fitting tools. Use these for ship stats, module stats, and fit "
+        "validation. Do not estimate from training knowledge — EVE data changes with "
+        "patches and only the values returned here are authoritative."
     ),
     stateless_http=True,
     json_response=True,

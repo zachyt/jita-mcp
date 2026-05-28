@@ -68,7 +68,6 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH" \
     JITA_MCP_SDE_PATH=/app/data/sde.sqlite \
-    JITA_MCP_PRICE_CACHE_PATH=/app/data/price_cache.sqlite \
     JITA_MCP_HOST=0.0.0.0 \
     JITA_MCP_PORT=8080
 

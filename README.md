@@ -1,24 +1,28 @@
 # jita-mcp
 
 Remote MCP server that gives Claude and Gemini ground truth on EVE Online ship
-fittings: stat validation, effective DPS/EHP with skills and bonuses applied,
-and live market prices. The LLM brings EVE meta knowledge (what's good for
-what content); this server answers "does this fit actually work and what does
-it cost."
+fittings: stat validation and effective DPS/EHP with skills and bonuses
+applied. The LLM brings EVE meta knowledge (what's good for what content); this
+server answers "does this fit actually work."
 
 ## Architecture
 
 ```
 Claude / Gemini (web)
   └── MCP connector (Streamable HTTP)
-        ├── SDE      — static data export (ships, modules, dogma, skills)
-        ├── eos      — dogma / fitting calculation engine (TBD: vendored Pyfa)
-        └── ESI      — live market prices, cached
+        ├── pyfa eve.db  — ships, modules, ammo, dogma, traits (built from
+        │                  vendor/pyfa/staticdata via db_update.py)
+        ├── eos          — dogma / fitting calculation engine (vendor/pyfa/eos)
+        └── Fuzzwork SDE — universe data (regions/systems/stations), reserved
+                           for future tools
 ```
 
-Three independent inputs (our code, the engine, the SDE) get baked into one
-runtime container via a multi-stage Dockerfile. Each input has its own cache
-layer so a change in one doesn't invalidate the others.
+Three independent inputs (our code, the engine + its eve.db, the Fuzzwork
+SDE) get baked into one runtime container via a multi-stage Dockerfile. Each
+input has its own cache layer so a change in one doesn't invalidate the others.
+
+Live market prices (ESI) intentionally aren't wired up — the tool surface
+focuses on the fitting calculus the LLM can't do on its own.
 
 ## Tools
 
@@ -84,20 +88,23 @@ scheduled GitHub Action that opens a PR when upstream advances.
 
 ```
 jita_mcp/
-  server.py             MCP entry point, tool registration
-  config.py             env-driven settings
-  tools/                one module per MCP tool (stubbed)
-  engine/               dogma / fitting engine wrapper (eos, TODO)
-  db/sde.py             SDE query helpers (all SQL lives here)
-  esi/                  ESI client + price cache
-tests/
-  fixtures/             tiny synthetic SDE for unit tests
+  server.py              MCP entry point, tool registration
+  config.py              env-driven settings
+  tools/                 one module per MCP tool
+  engine/eos_setup.py    wires pyfa's eos into sys.path; config shim
+  engine/_pyfa_shim/     drop-in replacements for pyfa root modules
+                         (shadows pyfa's wx-tainted config.py)
+  db/eve.py              ship/module/dogma lookups via eos.db (eve.db)
+  db/sde.py              reserved for non-ship Fuzzwork lookups
+tests/                   pytest, real-DB tests marked @pytest.mark.sde
 scripts/
-  fetch_sde.py          idempotent SDE downloader
+  fetch_sde.py           idempotent Fuzzwork SDE downloader
+  build_eve_db.py        runs pyfa's db_update.py through our shim
 vendor/
-  pyfa/                 git submodule → pyfa-org/Pyfa (we use vendor/pyfa/eos)
-Dockerfile              4-stage build (sde, eos, app, runtime)
-sde.checksum            pinned Fuzzwork SDE MD5
+  pyfa/                  git submodule → pyfa-org/Pyfa (vendor/pyfa/eos
+                         is the calculation engine; eve.db built locally)
+Dockerfile               4-stage build (sde, eos, app, runtime)
+sde.checksum             pinned Fuzzwork SDE MD5
 ```
 
 ## License
