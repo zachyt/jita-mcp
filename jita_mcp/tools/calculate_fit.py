@@ -98,10 +98,12 @@ def calculate_fit(
         "fitting_used": {
             "cpu": round(metrics.cpu_used, 2),
             "powergrid": round(metrics.pg_used, 2),
+            "calibration": round(metrics.calibration_used, 2),
         },
         "fitting_total": {
             "cpu": round(metrics.cpu_total, 2),
             "powergrid": round(metrics.pg_total, 2),
+            "calibration": round(metrics.calibration_total, 2),
         },
         "ehp": {k: round(v) for k, v in metrics.ehp.items()},
         "ehp_total": round(metrics.ehp_total),
@@ -182,6 +184,18 @@ def _collect_errors(
                 "excess": excess,
                 "message": f"Powergrid over budget by {excess} (used {round(metrics.pg_used, 2)}, "
                 f"have {round(metrics.pg_total, 2)})",
+            }
+        )
+
+    if metrics.calibration_used > metrics.calibration_total:
+        excess = round(metrics.calibration_used - metrics.calibration_total, 2)
+        errors.append(
+            {
+                "type": "calibration_overflow",
+                "excess": excess,
+                "message": f"Calibration over budget by {excess} "
+                f"(used {round(metrics.calibration_used, 2)}, "
+                f"have {round(metrics.calibration_total, 2)})",
             }
         )
 

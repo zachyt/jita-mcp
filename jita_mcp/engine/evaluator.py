@@ -49,12 +49,18 @@ class FitMetrics:
     max_speed: float
     cpu_used: float  # post-skill module CPU consumption
     pg_used: float
+    calibration_used: float  # rig calibration consumption
     cpu_total: float  # post-skill ship CPU output (bonused)
     pg_total: float
+    calibration_total: float  # ship's upgradeCapacity (calibration pool)
 
     @property
     def fits(self) -> bool:
-        return self.cpu_used <= self.cpu_total and self.pg_used <= self.pg_total
+        return (
+            self.cpu_used <= self.cpu_total
+            and self.pg_used <= self.pg_total
+            and self.calibration_used <= self.calibration_total
+        )
 
 
 @dataclass
@@ -236,6 +242,8 @@ class FitEvaluator:
             max_speed=float(fit.maxSpeed),
             cpu_used=float(getattr(fit, "cpuUsed", 0)),
             pg_used=float(getattr(fit, "pgUsed", 0)),
+            calibration_used=float(getattr(fit, "calibrationUsed", 0)),
             cpu_total=float(fit.ship.getModifiedItemAttr("cpuOutput") or 0),
             pg_total=float(fit.ship.getModifiedItemAttr("powerOutput") or 0),
+            calibration_total=float(fit.ship.getModifiedItemAttr("upgradeCapacity") or 0),
         )

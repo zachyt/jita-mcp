@@ -52,6 +52,17 @@ def test_overfit_cpu_and_pg_surfaces_errors() -> None:
 
 
 @pytest.mark.sde
+def test_calibration_field_reported() -> None:
+    """fitting_used/fitting_total now include calibration; verify it surfaces."""
+    res = calculate_fit(ship="Condor", modules=["Small Core Defense Field Extender II"])
+    assert res["status"] == "ok"
+    assert "calibration" in res["fitting_used"]
+    assert "calibration" in res["fitting_total"]
+    assert res["fitting_total"]["calibration"] > 0
+    assert res["fitting_used"]["calibration"] > 0
+
+
+@pytest.mark.sde
 def test_slot_overflow_high() -> None:
     """Fitting 5 high-slot modules on a Condor (4 high slots) flags overflow."""
     res = calculate_fit(
