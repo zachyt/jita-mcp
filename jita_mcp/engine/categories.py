@@ -41,6 +41,7 @@ _DAMAGE_MOD_GROUPS: list[str] = [
     "Gyrostabilizer",  # projectile
     "Heat Sink",  # laser
     "Entropic Radiation Sink",  # Triglavian
+    "Drone Damage Modules",  # drones — the actual group name in eve.db
 ]
 
 _LOW_TANK_GROUPS: list[str] = [

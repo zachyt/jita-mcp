@@ -51,6 +51,7 @@ async def get_modules_for_goal(
     slot: str,
     skills: dict[str, int] | None = None,
     implants: list[str] | None = None,
+    drones: list[str] | None = None,
     exclude: list[int] | None = None,
     preserve: list[int] | None = None,
     min_meta_level: int = 0,
@@ -78,6 +79,12 @@ async def get_modules_for_goal(
      "Eifyr and Co. 'Rogue' Surgical Strike SS-905"]). Implants boost ship
     CPU/PG, damage, speed, etc. and are factored into both the fit check
     and the effective stats. Defaults to no implants.
+
+    `drones` is an optional list of drone names (repeat for multiples).
+    Drones contribute DPS that damage mods can multiply — pass them when
+    asking for damage mods on a drone boat so the BCS/MFS/etc scoring
+    sees the right baseline weapon DPS. Drone bay + bandwidth get checked
+    in the fit validation per candidate.
 
     `raw=True` disables the "ship-size sanity" filter that, for battleship-tier
     hulls, drops obviously-wrong-size turrets (Small Pulse Laser on a
@@ -112,7 +119,12 @@ async def get_modules_for_goal(
     skills_effective = _resolve_skills(skills)
 
     try:
-        ev = FitEvaluator(ship, skills=skills_effective, implants=implants)
+        ev = FitEvaluator(
+            ship,
+            skills=skills_effective,
+            implants=implants,
+            drones=drones,
+        )
     except ValueError as e:
         return {"status": "error", "reason": str(e)}
 
