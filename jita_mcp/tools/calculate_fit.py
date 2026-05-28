@@ -126,6 +126,7 @@ async def calculate_fit(
         "status": "ok",
         "valid": not errors,
         "ship": ship_item.typeName,
+        "skills": "all_v" if skills is None else "custom",
         "slots_used": slots_used,
         "slots_total": slots_total,
         "fitting_used": {
