@@ -1,113 +1,118 @@
 # jita-mcp
 
-Remote MCP server that gives Claude and Gemini ground truth on EVE Online ship
-fittings: stat validation and effective DPS/EHP with skills and bonuses
-applied. The LLM brings EVE meta knowledge (what's good for what content); this
-server answers "does this fit actually work."
+An MCP server that lets Claude (and any other MCP-compatible LLM) actually fit
+EVE Online ships. The LLM brings the meta knowledge — what's good for what
+content — and `jita-mcp` answers the ground-truth questions: *does this fit
+work, what does it actually do, what does it cost?*
 
-## Architecture
+Stats are computed by pyfa's fitting engine, so ship bonuses, skill
+multipliers, ammo selection, drone DPS, implant effects, and stacking
+penalties are all applied correctly. Module prices come live from ESI
+(Jita 4-4 sell-min, cached per ESI's rules).
 
-```
-Claude / Gemini (web)
-  └── MCP connector (Streamable HTTP)
-        ├── pyfa eve.db  — ships, modules, ammo, dogma, traits (built from
-        │                  vendor/pyfa/staticdata via db_update.py)
-        ├── eos          — dogma / fitting calculation engine (vendor/pyfa/eos)
-        └── Fuzzwork SDE — universe data (regions/systems/stations), reserved
-                           for future tools
-```
+## What you can ask Claude
 
-Three independent inputs (our code, the engine + its eve.db, the Fuzzwork
-SDE) get baked into one runtime container via a multi-stage Dockerfile. Each
-input has its own cache layer so a change in one doesn't invalidate the others.
+> "Build me a kinetic-DPS Condor at All V. Use jita-mcp."
 
-Live market prices (ESI) intentionally aren't wired up — the tool surface
-focuses on the fitting calculus the LLM can't do on its own.
+> "I have a Vexor with Hammerhead IIs. What's the best low-slot DPS mod and
+> tank for a buffer fit? Keep it under 50M ISK."
+
+> "Validate this Manticore fit and tell me if it's cap-stable."
+
+> "Export this fit to EFT and list every skill I need."
 
 ## Tools
 
-| Tool                       | Purpose                                              |
-| -------------------------- | ---------------------------------------------------- |
-| `get_ship_info`            | Slot layout, fitting room, base resists, bonuses     |
-| `get_modules_for_goal`     | Ranked modules toward a goal (ehp, dps, speed, …)    |
-| `get_modules_by_attribute` | Ranked modules by a specific dogma attribute         |
-| `calculate_fit`            | Validate a full fit; return all stats and errors     |
-| `export_eft`               | EFT string + required-skills list for a valid fit    |
+| Tool | What it does |
+| --- | --- |
+| `get_ship_info` | Slot layout, fitting room, base HP and resists, capacities (cargo + drone bay + every specialised hold), ship bonuses, required skills. |
+| `get_modules_for_goal` | Ranked module candidates for a goal + slot (max DPS, max EHP, max speed, specific damage types). Auto-picks best ammo for damage goals. Returns Jita 4-4 prices per candidate. |
+| `calculate_fit` | Validates a complete fit. Returns CPU/PG/calibration/drone bay usage, DPS by damage type, EHP per layer, resists, capacitor stability, mobility, sensor stats, total ISK cost, and a list of any problems with actionable messages. |
+| `export_eft` | Formats a fit as the EFT string EVE / pyfa accept on paste-in, plus the full recursive skill prerequisite list. |
 
-## Dev setup
+The full schemas are exposed via MCP's `list_tools`; Claude reads them
+automatically.
 
-Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/). On macOS:
+## Quick start
 
-```bash
-brew install uv
-```
-
-### Bootstrap
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-git clone --recurse-submodules <repo-url> jita-mcp
+# 1. Clone with submodules (pyfa is vendored)
+git clone --recurse-submodules https://github.com/zachyt/jita-mcp
 cd jita-mcp
-git submodule update --init --recursive    # only if you forgot --recurse-submodules
-uv sync                                    # creates .venv, installs deps
-python3 scripts/fetch_sde.py               # downloads + decompresses SDE (~130MB)
+
+# 2. Install deps + build pyfa's data DB (one-time, ~10s)
+uv sync
+uv run python scripts/build_eve_db.py
+
+# 3. (Optional) Download the Fuzzwork SDE if you want it ready for future
+#    universe-data tools
+python3 scripts/fetch_sde.py
+
+# 4. Start the server
+uv run jita-mcp                              # listens on :8080
 ```
 
-### Day-to-day
-
-`uv` is the entry point for everything — no task runner, no Makefile.
-
-| Command                       | What it does                                           |
-| ----------------------------- | ------------------------------------------------------ |
-| `uv sync`                     | Install / sync Python deps                             |
-| `uv run pytest`               | Run the test suite                                     |
-| `uv run ruff check`           | Lint                                                   |
-| `uv run ruff format`          | Format                                                 |
-| `uv run jita-mcp`              | Start the MCP server on :8080                          |
-| `python3 scripts/fetch_sde.py` | Idempotent SDE download (pinned by `sde.checksum`)    |
-
-### SDE
-
-The Static Data Export (~700MB uncompressed) is sourced from Fuzzwork and
-**pinned by MD5 in `sde.checksum`** so dev/CI/prod builds are reproducible.
-`python3 scripts/fetch_sde.py` is idempotent — it skips the download when the
-local file already matches the pinned MD5. To pull whatever is currently live
-upstream (useful for the SDE-watch workflow), run:
+### Adding it to Claude Code
 
 ```bash
-python3 scripts/fetch_sde.py --version latest
+claude mcp add jita-mcp --transport http http://localhost:8080/mcp
 ```
 
-### Submodule (Pyfa)
+Restart your Claude Code session and the five tools become available. After
+that, just talk to Claude about EVE fits — it'll call the tools as needed.
 
-The fitting engine lives at `vendor/pyfa/` as a git submodule pinned to a
-specific Pyfa commit. The pin moves only via an explicit
-`git submodule update --remote vendor/pyfa && git commit` — automated by a
-scheduled GitHub Action that opens a PR when upstream advances.
+### Adding it to Claude.ai (web)
 
-## Project layout
+Settings → Connectors → Add custom connector → point at your server's HTTPS URL.
+Requires public HTTPS, so you'll want to deploy it (see *Deployment* below) or
+use a tunnel like `ngrok`.
 
+## Day-to-day commands
+
+| Command | What it does |
+| --- | --- |
+| `uv sync` | Install / sync Python deps |
+| `uv run jita-mcp` | Start the MCP server on `:8080` |
+| `uv run pytest` | Run the test suite |
+| `uv run ruff check` | Lint |
+| `uv run python scripts/build_eve_db.py` | Rebuild `eve.db` from pyfa staticdata |
+
+## Configuration
+
+All via environment variables (defaults in `jita_mcp/config.py`):
+
+| Var | Default | Purpose |
+| --- | --- | --- |
+| `JITA_MCP_HOST` | `0.0.0.0` | Bind address |
+| `JITA_MCP_PORT` | `8080` | Bind port |
+| `JITA_MCP_SDE_PATH` | `data/sde.sqlite` | Fuzzwork SDE path (optional) |
+
+## Deployment
+
+Build the production container with:
+
+```bash
+docker build -t jita-mcp:latest .
+docker run -p 8080:8080 jita-mcp:latest
 ```
-jita_mcp/
-  server.py              MCP entry point, tool registration
-  config.py              env-driven settings
-  tools/                 one module per MCP tool
-  engine/eos_setup.py    wires pyfa's eos into sys.path; config shim
-  engine/_pyfa_shim/     drop-in replacements for pyfa root modules
-                         (shadows pyfa's wx-tainted config.py)
-  db/eve.py              ship/module/dogma lookups via eos.db (eve.db)
-  db/sde.py              reserved for non-ship Fuzzwork lookups
-tests/                   pytest, real-DB tests marked @pytest.mark.sde
-scripts/
-  fetch_sde.py           idempotent Fuzzwork SDE downloader
-  build_eve_db.py        runs pyfa's db_update.py through our shim
-vendor/
-  pyfa/                  git submodule → pyfa-org/Pyfa (vendor/pyfa/eos
-                         is the calculation engine; eve.db built locally)
-Dockerfile               4-stage build (sde, eos, app, runtime)
-sde.checksum             pinned Fuzzwork SDE MD5
-```
+
+The Dockerfile is multi-stage and bakes everything needed (`eve.db`, the eos
+source, our Python deps) into the runtime image. Approximate sizes: ~400 MB
+compressed, ~2 GB on disk.
+
+Point any HTTPS-fronted host (Fly.io, Lightsail, your own VPS) at the
+container and add the URL as a custom connector in Claude.
 
 ## License
 
-GPL-3.0-or-later. Required because the project links the eos fitting engine,
-which is GPL-3.0.
+GPL-3.0-or-later. The project links pyfa's eos engine (LGPL-3.0) and ships
+pyfa's bundled data; GPL-3.0 satisfies both.
+
+## Credits
+
+- [Pyfa](https://github.com/pyfa-org/Pyfa) — the fitting engine and the EVE
+  data pipeline this server depends on
+- [Fuzzwork](https://www.fuzzwork.co.uk/) — the SDE database dumps
+- CCP — for keeping ESI public and free
